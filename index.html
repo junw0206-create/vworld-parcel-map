@@ -242,6 +242,7 @@ let DATA = null;          // LH 노후필지
 let SEL = null;           // 선택 필지 상태
 const ui = { b3d:false, shadow:false, mass:false, day:'12-22', hour:12, colorBy:'osc', gu:'' };
 
+let readyResolve; const mapReady = new Promise(r=>readyResolve=r);
 map.on('load', () => {
   map.addSource('shadow', {type:'geojson', data:EMPTY});
   map.addSource('parcel', {type:'geojson', data:EMPTY});
@@ -265,6 +266,7 @@ map.on('load', () => {
     'circle-color':colorExpr('osc'), 'circle-stroke-width':1.2, 'circle-stroke-color':'#fff', 'circle-opacity':.92 }});
   if(DATA) initParcels();
   bindMapEvents();
+  readyResolve();
 });
 
 // ═══ LH 노후필지 레이어 ═══
@@ -377,6 +379,7 @@ function clearSelection(){
 }
 async function selectAt({lngLat, feat}){
   const seq=++selSeq;
+  await mapReady;
   const research = feat ? feat.properties : null;
   let ll = lngLat ? [lngLat.lng, lngLat.lat] : feat.geometry.coordinates;
   let pnu=null, poly=null, addr=research ? '서울특별시 '+research.addr : '';
