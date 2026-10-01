@@ -14,7 +14,7 @@ module.exports = async (req, res) => {
   try {
     const r = await fetch(`https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo?${p}`);
     const txt = await r.text();
-    res.setHeader('Cache-Control', 's-maxage=86400');
+    res.setHeader('Cache-Control', txt.includes('"00"') ? 's-maxage=86400' : 'no-store');
     try { return res.json(JSON.parse(txt)); }
     catch { res.statusCode = 502; return res.json({ error: txt.slice(0, 300) }); }
   } catch (e) { res.statusCode = 502; return res.json({ error: String(e) }); }

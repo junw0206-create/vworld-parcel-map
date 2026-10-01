@@ -13,7 +13,7 @@ module.exports = async (req, res) => {
     const r = await fetch(`https://api.vworld.kr/${path}?${p}`, { headers: { Referer: `https://${host}/` } });
     const txt = await r.text();
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Cache-Control', 's-maxage=86400');
+    res.setHeader('Cache-Control', /INCORRECT_KEY|"ERROR"|resultCode" : "(?!00)/.test(txt) ? 'no-store' : 's-maxage=86400');
     res.statusCode = r.status;
     return res.end(txt);
   } catch (e) { res.statusCode = 502; return res.json({ error: String(e) }); }
