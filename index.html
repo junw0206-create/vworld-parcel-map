@@ -170,7 +170,15 @@ const LEGAL = {  // 서울시 조례 기준 건폐율/용적률 상한(%)
 };
 function legalOf(uz){ for(const k in LEGAL) if(uz&&uz.includes(k.replace('지역',''))) return LEGAL[k]; return null; }
 
-async function vw(url){ const r=await fetch(url); return r.json(); }
+// 배포 환경에서는 VWorld 데이터 API가 CORS로 막히므로 /api/vworld 프록시 경유 (로컬 Live Server는 직접 호출)
+const IS_LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+async function vw(url){
+  if(!IS_LOCAL && url.startsWith('https://api.vworld.kr/')){
+    const u=new URL(url); u.searchParams.delete('key');
+    url = `api/vworld?_p=${encodeURIComponent(u.pathname.slice(1))}&${u.searchParams}`;
+  }
+  const r=await fetch(url); return r.json();
+}
 
 // ─── data.go.kr 건축HUB 건축물대장 표제부 (연면적·층수) ───────────────
 // PNU 19자리 = 시군구(5)+법정동(5)+대지구분(1: 1일반/2산)+본번(4)+부번(4)
