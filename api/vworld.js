@@ -3,12 +3,12 @@
 const ALLOWED = new Set(['req/search', 'req/data', 'ned/data/getLandCharacteristics']);
 module.exports = async (req, res) => {
   const q = { ...(req.query || {}) };
-  const path = q._p; delete q._p; delete q.key; delete q.domain;
+  const path = q._p; delete q._p; delete q.key;
   if (!ALLOWED.has(path)) { res.statusCode = 400; return res.json({ error: 'path not allowed' }); }
   const key = process.env.VWORLD_KEY;
   if (!key) { res.statusCode = 500; return res.json({ error: 'VWORLD_KEY 환경변수 없음' }); }
   const host = req.headers['x-forwarded-host'] || req.headers.host;
-  const p = new URLSearchParams({ ...q, key, domain: process.env.VWORLD_DOMAIN || host /* VWorld 키 등록 URL과 같아야 함 */ });
+  const p = new URLSearchParams({ ...q, key, domain: process.env.VWORLD_DOMAIN || q.domain || host /* VWorld 키 등록 URL과 같아야 함 */ });
   try {
     const r = await fetch(`https://api.vworld.kr/${path}?${p}`, { headers: { Referer: `https://${host}/` } });
     const txt = await r.text();
