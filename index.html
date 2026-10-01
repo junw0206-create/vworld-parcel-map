@@ -250,7 +250,7 @@ map.on('load', () => {
   map.addSource('mass',   {type:'geojson', data:EMPTY});
   map.addSource('pts',    {type:'geojson', data:EMPTY});
 
-  map.addLayer({id:'shadow', type:'fill', source:'shadow', layout:{visibility:'none'}, paint:{'fill-color':'#0b1020','fill-opacity':.28}});
+  map.addLayer({id:'shadow', type:'fill', source:'shadow', layout:{visibility:'none'}, paint:{'fill-color':'#0b1020','fill-opacity':.38}});
   map.addLayer({id:'parcel-fill', type:'fill', source:'parcel', paint:{'fill-color':'#1f3a93','fill-opacity':.16}});
   map.addLayer({id:'parcel-line', type:'line', source:'parcel', paint:{'line-color':'#1f3a93','line-width':2.6}});
   map.addLayer({id:'bldg-3d', type:'fill-extrusion', source:'bldg', layout:{visibility:'none'}, paint:{
@@ -405,7 +405,7 @@ async function selectAt({lngLat, feat}){
     const b=new maplibregl.LngLatBounds(); ringsOf(poly.geometry).flat().forEach(c=>b.extend(c));
     SEL.bounds=b; SEL.center=centroid(ringsOf(poly.geometry)[0]);
     popup.setLngLat(SEL.center);
-    map.fitBounds(b,{padding:fitPad(), maxZoom:18, duration:600});
+    map.fitBounds(b,{padding:fitPad(), maxZoom: (ui.b3d||ui.shadow) ? 17 : 18, duration:600});
   }
   renderSel();
 
