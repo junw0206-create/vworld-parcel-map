@@ -101,6 +101,18 @@
   }
   @media (min-width:761px){ #fold{display:none} }
   #info.hide{display:none}
+  svg.dg{width:100%;height:auto;display:block;margin:6px 0}
+  svg.dg text{font-size:10px;fill:var(--muted);font-family:inherit}
+  .fun{background:linear-gradient(135deg,#fef3c7,#fde68a);color:#78350f;border-radius:10px;padding:9px 11px;margin:8px 0 12px;font-size:12.5px;line-height:1.5}
+  :root[data-theme="dark"] .fun{background:#3a2e10;color:#fde68a}
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .fun{background:#3a2e10;color:#fde68a} }
+  .slider{margin:8px 0}
+  .slider label{display:flex;justify-content:space-between;font-size:12px}
+  .slider input{width:100%}
+  .ok{color:var(--ok);font-weight:600} .ng{color:var(--warn);font-weight:600}
+  .rank button{display:flex;width:100%;justify-content:space-between;border:0;border-bottom:1px solid var(--line);background:none;padding:6px 2px;cursor:pointer;text-align:left;font-size:12.5px}
+  .rank button:hover{background:var(--soft)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 </style>
 </head>
 <body class="noinfo">
@@ -124,8 +136,9 @@
       <div class="chips">
         <button class="btn" id="b3d" type="button">3D 건물</button>
         <button class="btn" id="bShadow" type="button">그림자</button>
-        <button class="btn" id="bMass" type="button">법정 최대 볼륨</button>
+        <button class="btn" id="bMass" type="button">매스 실험</button>
       </div>
+      <div style="margin-top:8px"><select id="bColor"><option value="h">3D 건물 색상: 높이</option><option value="yr">3D 건물 색상: 준공 연대</option><option value="use">3D 건물 색상: 용도</option></select><div id="bLegend"></div></div>
       <div id="sunBox" style="display:none;margin-top:8px">
         <div class="chips" id="days">
           <button class="btn on" data-d="12-22" type="button">동지</button>
@@ -333,11 +346,15 @@ function setTabs(list){
   $('#tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{ curTab=+b.dataset.i; setTabs(TABS); if(innerWidth<=760 && info.classList.contains('min')) $('#iMin').click(); });
   $('#pane').innerHTML = list[curTab][1]();
   $('#pane').querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>ACTIONS[b.dataset.act]?.(b));
+  list[curTab][2]?.();
 }
 const ACTIONS = {
   mass: ()=>$('#bMass').click(),
   shadow: ()=>{ if(!ui.shadow) $('#bShadow').click(); },
   zoom: ()=>{ if(SEL?.bounds) map.fitBounds(SEL.bounds,{padding:fitPad(),maxZoom:18}); },
+  go: b=>{ const f=DATA.features.find(x=>x.properties.id===b.dataset.id); if(f){ map.jumpTo({center:f.geometry.coordinates, zoom:16}); selectAt({feat:f}); } },
+  legal: ()=>{ setMassLegal(); renderSel(); },
+  sky3d: ()=>{ if(!ui.b3d) $('#b3d').click(); },
 };
 
 // 대시보드 (선택 없음)
@@ -369,10 +386,15 @@ function renderDashboard(){
   const byType = () => `<h2>주택형태</h2>${bars(count('주택형태'))}<h2 style="margin-top:12px">신규 임대유형</h2>${bars(count('신규임대유형'))}<h2 style="margin-top:12px">지형</h2>${bars(count('지형높이'))}<h2 style="margin-top:12px">도로접면</h2>${bars(count('도로접면').slice(0,8))}`;
   const help = () => `
     <div class="kv"><dt>필지 클릭</dt><dd>경계·토지특성·건축물대장 조회</dd><dt>3D 건물</dt><dd>VWorld 건물정보(높이·층수)로 돌출</dd>
-    <dt>그림자</dt><dd>날짜·시각별 태양 위치로 그림자 계산, 선택 필지 동지 일조시간 분석</dd><dt>법정 최대 볼륨</dt><dd>용도지역 상한(건폐율·용적률)으로 낼 수 있는 매스</dd>
+    <dt>그림자</dt><dd>날짜·시각별 태양 위치로 그림자 계산</dd><dt>형태</dt><dd>필지 치수·형상지수·장축 방위·정북 경계</dd><dt>맥락</dt><dd>도-지(Figure-ground) 다이어그램, 반경 100m 밀도·용도·건물 나이</dd><dt>하늘·일조</dt><dd>어안 하늘 다이어그램 + 태양궤적, 하늘 열림률(SVF), 동지 일조시간</dd><dt>단면</dt><dd>필지를 지나는 남북·동서 스카이라인 단면</dd><dt>매스 실험</dt><dd>층수·건폐율을 바꿔 보며 법규 충족과 이웃에 드리우는 그림자 확인</dd>
     <dt>주소 검색</dt><dd>서울 외 전국 지번 검색 가능</dd><dt>F12 콘솔</dt><dd>data.go.kr 응답 원문 확인</dd></div>
     <div class="note">데이터: VWorld(지도·연속지적·건물정보·토지특성), 국토교통부 건축HUB 건축물대장(data.go.kr), LH 토지주택연구원 연구 부록.</div>`;
-  setTabs([['개요',overview],['자치구',byGu],['유형',byType],['사용법',help]]);
+  const rankList = (title, key, unit, desc=true, d=0) => { const arr=DATA.features.filter(f=>(!ui.gu||f.properties.gu===ui.gu) && f.properties[key]!=null).sort((a,b)=>desc?b.properties[key]-a.properties[key]:a.properties[key]-b.properties[key]).slice(0,5);
+    return `<h2 style="margin-top:12px">${title}</h2><div class="rank">${arr.map((f,i)=>`<button type="button" data-act="go" data-id="${esc(f.properties.id)}"><span>${i+1}. ${esc(f.properties.addr)}</span><b>${fmt(f.properties[key],d)}${unit}</b></button>`).join('')}</div>`; };
+  const rank = () => `<div class="fun">🏆 눌러서 바로 그 필지로 이동해 보세요.</div>`
+    + rankList('가장 오래된 필지','노후년수','년',true,1) + rankList('가장 넓은 대지','대지면적','㎡') + rankList('가장 촘촘한 필지 (용적률)','용적률','%')
+    + rankList('가장 작은 대지','대지면적','㎡',false) + rankList('임대세대가 가장 많은 필지','임대세대수','세대');
+  setTabs([['개요',overview],['랭킹',rank],['자치구',byGu],['유형',byType],['사용법',help]]);
 }
 
 // ═══ 필지 선택 ═══
@@ -431,10 +453,10 @@ async function selectAt({lngLat, feat}){
     ? `<div class="pbld">연면적 <b>${fmt(m.totArea,2)}㎡</b> · 지상 <b>${m.grndFlrCnt}층</b>${+m.ugrndFlrCnt?` / 지하 ${m.ugrndFlrCnt}층`:''}<br><span style="color:#6b7280;font-size:11px">건축물대장 표제부 · ${esc(m.mainPurpsCdNm)} · data.go.kr</span></div>`
     : `<div class="pbld">건축물대장: 등록된 건축물 없음</div>`));
   renderSel();
-  updateMass();
-  if(poly) await ensureBuildings(paddedBbox(SEL.bounds, 180));
+  ui.massInit=false; updateMass();
+  if(poly) await ensureBuildings(paddedBbox(SEL.bounds, 270));
   if(seq!==selSeq) return;
-  markSelBuildings(); updateShadows(); if(TABS[curTab]?.[0]==='일조') renderSel();
+  markSelBuildings(); updateShadows(); SEL.bldReady=true; if(['맥락','하늘·일조','단면','매스 실험'].includes(TABS[curTab]?.[0])) renderSel();
 }
 function mainBld(t){ if(!t?.length) return null; const m=t.filter(i=>String(i.mainAtchGbCdNm||'').includes('주')); return (m.length?m:t).slice().sort((a,b)=>(+b.totArea||0)-(+a.totArea||0))[0]; }
 
@@ -453,7 +475,7 @@ function renderSel(){
   $('#iAddr').textContent = S.addr || '필지 조회 중…';
   $('#iMeta').innerHTML = (S.pnu?`PNU ${S.pnu}`:'') + (S.research?` <span class="badge">LH 노후필지 #${esc(S.research.id)}</span>`:'') + (S.loading?' <span class="spin"></span>':'');
   if(S.error){ $('#tabs').innerHTML=''; $('#pane').innerHTML=`<p>${esc(S.error)}</p>`; return; }
-  const tabs=[['개요',tabOverview],['건축물',tabBuilding],['층별',tabFloors],['일조',tabSun]];
+  const tabs=[['개요',tabOverview],['건축물',tabBuilding],['층별',tabFloors],['형태',tabShape],['맥락',tabContext,afterContext],['하늘·일조',tabSky],['단면',tabSection],['매스 실험',tabMass,afterMass]];
   if(S.research) tabs.push(['LH 연구',tabResearch]);
   if(S.research?.시설) tabs.push(['주변시설',tabFac]);
   setTabs(tabs);
@@ -555,7 +577,8 @@ async function ensureBuildings(box){
       const r = await vwData('LT_C_BLDGINFO', {geomFilter:`BOX(${box.map(v=>v.toFixed(6)).join(',')})`, geometry:true, size:1000, page});
       const fc=r?.response?.result?.featureCollection; if(!fc) break;
       fc.features.forEach(f=>{ const p=f.properties, h=+p.height>0 ? +p.height : Math.max(+p.grnd_flr||1,1)*3.1;
-        BLD.set(f.id, {type:'Feature', id:f.id, geometry:f.geometry, properties:{h, fl:+p.grnd_flr||0, area:+p.totalarea||0, apr:p.useapr_day, nm:p.bld_nm}}); });
+        const yr=+String(p.useapr_day||'').slice(0,4)||0;
+        BLD.set(f.id, {type:'Feature', id:f.id, geometry:f.geometry, properties:{h, fl:+p.grnd_flr||0, area:+p.totalarea||0, yr: yr>1900?yr:0, use:String(p.usability||'').slice(0,2), nm:p.bld_nm}}); });
       if(+r.response.page.current >= +r.response.page.total) break;
     }
     loadedBoxes.push(box);
@@ -574,15 +597,28 @@ function viewBuildings(){
   const b=map.getBounds(); ensureBuildings(paddedBbox(b, 60)).then(()=>{ markSelBuildings(); updateShadows(); });
 }
 
-// ═══ 법정 최대 볼륨 (건폐율로 줄인 필지 × 용적률/건폐율 층수) ═══
+// ═══ 매스 실험 (필지를 건폐율만큼 축소한 바닥 × 층수) ═══
+ui.massFl=4; ui.massBc=60; ui.massFh=3.0; ui.massInit=false;
+function setMassLegal(){ const lg=legalOf(SEL?.land?.prposArea1Nm)||[60,200]; ui.massBc=lg[0]; ui.massFl=Math.max(1,Math.floor(lg[1]/lg[0])); ui.massFh=3.0; ui.massInit=true; updateMass(); }
+function massFeature(){
+  if(!SEL?.poly) return null;
+  const k=Math.sqrt(ui.massBc/100), h=ui.massFl*ui.massFh;
+  const r=ringsOf(SEL.poly.geometry)[0], c=centroid(r);
+  return {type:'Feature', id:'mass', properties:{h}, geometry:{type:'Polygon', coordinates:[r.map(([x,y])=>[c[0]+(x-c[0])*k, c[1]+(y-c[1])*k])]}};
+}
+function massCheck(){
+  const lg=legalOf(SEL?.land?.prposArea1Nm); const A=+SEL?.land?.lndpclAr || (SEL?.poly? Math.abs(polyArea(ringsOf(SEL.poly.geometry)[0].map(frame().xy))) : 0);
+  const fp=A*ui.massBc/100, gfa=fp*ui.massFl, far=A?gfa/A*100:0, H=ui.massFl*ui.massFh;
+  return {lg, A, fp, gfa, far, H, okB: lg? ui.massBc<=lg[0] : null, okF: lg? far<=lg[1]+1e-6 : null, setback: H<=10?1.5:H/2};
+}
 function updateMass(){
   const src=map.getSource('mass'); if(!src) return;
-  const lg=legalOf(SEL?.land?.prposArea1Nm);
-  if(!ui.mass || !SEL?.poly || !lg){ src.setData(EMPTY); if(ui.mass&&SEL&&!lg) toast('용도지역 상한을 알 수 없어 볼륨을 만들 수 없습니다'); return; }
-  const k=Math.sqrt(lg[0]/100), floors=Math.floor(lg[1]/lg[0]), h=floors*3.1;
-  const scaled = ringsOf(SEL.poly.geometry).map(r=>{ const c=centroid(r); return r.map(([x,y])=>[c[0]+(x-c[0])*k, c[1]+(y-c[1])*k]); });
-  src.setData({type:'FeatureCollection', features:[{type:'Feature', properties:{h}, geometry:{type:'Polygon', coordinates:[scaled[0]]}}]});
-  toast(`법정 최대: 건폐율 ${lg[0]}% · 용적률 ${lg[1]}% → 약 ${floors}층 (${h.toFixed(0)}m)`);
+  if(!ui.mass || !SEL?.poly){ src.setData(EMPTY); return; }
+  if(!ui.massInit) setMassLegal();
+  const c=massCheck(), f=massFeature();
+  map.setPaintProperty('mass-3d','fill-extrusion-color', (c.okB!==false && c.okF!==false) ? '#10b981' : '#ef4444');
+  src.setData({type:'FeatureCollection', features:[f]});
+  if(ui.shadow) updateShadows();
 }
 
 // ═══ 태양 위치 · 그림자 (SunCalc 공식) ═══
@@ -620,7 +656,8 @@ function updateShadows(){
   const azDeg=(sun.az/RAD+180+360)%360;
   $('#sunInfo').textContent = `${String(Math.floor(ui.hour)).padStart(2,'0')}:${String(Math.round(ui.hour%1*60)).padStart(2,'0')} · 태양고도 ${(sun.alt/RAD).toFixed(1)}° · 방위 ${azDeg.toFixed(0)}° ${sun.alt<0?'(해 짐)':''}`;
   if(!ui.shadow){ src.setData(EMPTY); return; }
-  const feats=[]; for(const f of BLD.values()){ const s=shadowOf(f,sun,c.lat); if(s) feats.push({type:'Feature',properties:{},geometry:{type:'MultiPolygon',coordinates:s.map(r=>[r])}}); }
+  const all=[...BLD.values()]; const mf=ui.mass&&massFeature(); if(mf) all.push(mf);
+  const feats=[]; for(const f of all){ const s=shadowOf(f,sun,c.lat); if(s) feats.push({type:'Feature',properties:{},geometry:{type:'MultiPolygon',coordinates:s.map(r=>[r])}}); }
   src.setData({type:'FeatureCollection', features:feats});
 }
 // 선택 필지 일조 분석: 필지 중심점이 주변 건물 그림자에 덮이는지 10분 간격 검사
@@ -655,6 +692,203 @@ function tabSun(){
     건축법 시행령 일조 기준(동지 09–15시 연속 2시간 또는 08–16시 총 4시간)과 비교용이며, 지형·수목·담장은 반영하지 않습니다.</div>`;
 }
 
+
+// ═══ 대지 분석 도구 ═══
+function frame(){ const [lng0,lat0]=SEL.center, kx=111320*Math.cos(lat0*RAD), ky=110540; return {kx,ky,xy:c=>[(c[0]-lng0)*kx,(c[1]-lat0)*ky]}; }
+const polyArea = r => { let a=0; for(let i=0;i<r.length-1;i++) a+=r[i][0]*r[i+1][1]-r[i+1][0]*r[i][1]; return a/2; };
+const perim = r => { let p=0; for(let i=0;i<r.length-1;i++) p+=Math.hypot(r[i+1][0]-r[i][0], r[i+1][1]-r[i][1]); return p; };
+function nearBuildings(R){
+  const key=BLD.size+'|'+(SEL.own?.size||0);
+  if(SEL._nbKey!==key){
+    const F=frame(), own=SEL.own||new Set();
+    SEL._nb=[...BLD.values()].map(f=>{ const rings=ringsOf(f.geometry).map(r=>r.map(F.xy)); const c=centroid(rings[0]); const xs=rings.flat().map(p=>p[0]), ys=rings.flat().map(p=>p[1]);
+      return {f, rings, c, d:Math.hypot(c[0],c[1]), own:own.has(f.id), area:Math.abs(polyArea(rings[0])), h:f.properties.h, fl:f.properties.fl, yr:f.properties.yr, use:f.properties.use,
+        bb:[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]}; }).filter(b=>b.d<300);
+    SEL._nbKey=key;
+  }
+  return SEL._nb.filter(b=>b.d<R);
+}
+const needBld = () => !SEL?.center ? (wait()||'<p class="muted">필지 경계가 없어 분석할 수 없습니다.</p>') : (!SEL.bldReady ? '<p class="muted"><span class="spin"></span> 주변 건물 불러오는 중…</p>' : '');
+const USE = {'01':'단독주택','02':'공동주택','03':'1종근생','04':'2종근생','05':'문화집회','06':'종교','07':'판매','08':'운수','09':'의료','10':'교육연구','11':'노유자',
+  '12':'수련','13':'운동','14':'업무','15':'숙박','16':'위락','17':'공장','18':'창고','19':'위험물','20':'자동차','21':'동식물','22':'자원순환','23':'교정','24':'국방','25':'방송통신','26':'발전','27':'묘지','28':'관광휴게','29':'장례'};
+const USE_COLOR = {'01':'#f4a261','02':'#e76f51','03':'#2a9d8f','04':'#43aa8b','07':'#9b5de5','10':'#277da1','14':'#577590','17':'#6c757d','18':'#adb5bd'};
+const north = (x,y,s=1) => `<g transform="translate(${x},${y}) scale(${s})"><path d="M0,-14 L6,6 L0,2 L-6,6 Z" fill="var(--warn)"/><text x="0" y="18" text-anchor="middle" style="font-weight:700;fill:var(--warn)">N</text></g>`;
+
+// ── 형태
+function shapeMetrics(){
+  const F=frame(), r=ringsOf(SEL.poly.geometry)[0].map(F.xy), A=Math.abs(polyArea(r)), P=perim(r);
+  const h=hull(r.slice(0,-1)); let best=null;
+  for(let i=0;i<h.length-1;i++){ const ang=Math.atan2(h[i+1][1]-h[i][1], h[i+1][0]-h[i][0]), c=Math.cos(-ang), s=Math.sin(-ang); let a=[1e9,-1e9,1e9,-1e9];
+    h.forEach(([x,y])=>{ const X=x*c-y*s, Y=x*s+y*c; a=[Math.min(a[0],X),Math.max(a[1],X),Math.min(a[2],Y),Math.max(a[3],Y)]; });
+    const ar=(a[1]-a[0])*(a[3]-a[2]); if(!best||ar<best.a) best={a:ar,w:a[1]-a[0],d:a[3]-a[2],ang}; }
+  const long=Math.max(best.w,best.d), short=Math.min(best.w,best.d), axis= best.w>=best.d ? best.ang : best.ang+Math.PI/2;
+  const bearing=(((90-axis/RAD)%180)+180)%180;
+  const sg=polyArea(r)>0?1:-1, edges=[]; let nlen=0;
+  for(let i=0;i<r.length-1;i++){ const dx=r[i+1][0]-r[i][0], dy=r[i+1][1]-r[i][1], L=Math.hypot(dx,dy); if(L<0.3) continue; const ny=-sg*dx/L; if(ny>0.7) nlen+=L; edges.push({a:r[i],b:r[i+1],L,north:ny>0.7}); }
+  return {r,A,P,comp:4*Math.PI*A/(P*P),long,short,ratio:long/short,bearing,nlen,edges,fill:A/best.a};
+}
+function tabShape(){
+  if(!SEL?.poly) return wait()||'<p class="muted">필지 경계가 없습니다.</p>';
+  const m=shapeMetrics(), xs=m.r.map(p=>p[0]), ys=m.r.map(p=>p[1]);
+  const span=Math.max(Math.max(...xs)-Math.min(...xs), Math.max(...ys)-Math.min(...ys)), sc=220/span, cx=(Math.max(...xs)+Math.min(...xs))/2, cy=(Math.max(...ys)+Math.min(...ys))/2;
+  const P=([x,y])=>[150+(x-cx)*sc, 140-(y-cy)*sc];
+  const shapeTxt = m.fill<0.8 ? '부정형(깎이거나 꺾인 모양)' : m.ratio>2.2 ? '세장형(길쭉한 모양)' : m.comp>0.72 ? '정방형에 가까움' : '장방형';
+  const orient = (m.bearing<25||m.bearing>155) ? '남북으로 긴 필지 — 동·서향 배치가 되기 쉬움' : (m.bearing>65&&m.bearing<115) ? '동서로 긴 필지 — 남향 배치에 유리' : '사선 방향 필지';
+  const uz=SEL.land?.prposArea1Nm||'', resi=/전용주거|일반주거/.test(uz);
+  const tiles=Math.round(m.A/3.3058);
+  return `<svg class="dg" viewBox="0 0 300 280">
+    <path d="M${m.r.map(P).map(p=>p.join(',')).join('L')}Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
+    ${m.edges.map(e=>{ const a=P(e.a), b=P(e.b); return (e.north?`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="var(--warn)" stroke-width="4" stroke-linecap="round"/>`:'')
+      + (e.L>=2?`<text x="${(a[0]+b[0])/2}" y="${(a[1]+b[1])/2}" text-anchor="middle" dy="-3" style="fill:var(--fg)">${e.L.toFixed(1)}m</text>`:''); }).join('')}
+    ${north(275,30)}<text x="8" y="272">축척 ${(span).toFixed(0)}m 폭 · 빨간 변 = 정북 쪽 경계</text></svg>
+    <div class="fun">📐 이 땅은 <b>${fmt(m.A,1)}㎡ ≈ ${fmt(m.A/3.3058,1)}평</b> — 원룸(약 20㎡) <b>${fmt(m.A/20,0)}개</b>, 주차면(12.5㎡) <b>${fmt(m.A/12.5,0)}대</b>를 깔 수 있는 크기예요.</div>
+    <dl class="kv"><dt>둘레</dt><dd>${fmt(m.P,1)}m</dd><dt>장변 × 단변</dt><dd>${fmt(m.long,1)}m × ${fmt(m.short,1)}m (비 ${m.ratio.toFixed(2)})</dd>
+    <dt>형상지수</dt><dd>${m.comp.toFixed(2)} <span class="muted">(원=1, 정사각형=0.79)</span></dd><dt>사각형 충전율</dt><dd>${(m.fill*100).toFixed(0)}% → ${shapeTxt}</dd>
+    <dt>장축 방위</dt><dd>${m.bearing.toFixed(0)}° · ${orient}</dd><dt>정북 경계 길이</dt><dd>${fmt(m.nlen,1)}m</dd></dl>
+    ${resi?`<div class="note"><b>정북방향 일조사선</b>(건축법 시행령 제86조, ${esc(uz)}): 높이 10m 이하 부분은 정북 경계에서 1.5m 이상, 10m 초과 부분은 그 높이의 1/2 이상 띄워야 합니다. 빨간 변이 이 규정이 걸리는 경계예요.</div>`:''}`;
+}
+
+// ── 맥락: 도-지 다이어그램 · 반경 100m 밀도 · 용도 · 나이
+function tabContext(){
+  const nb0=needBld(); if(nb0) return nb0;
+  const nb=nearBuildings(160), R=100, inR=nb.filter(b=>b.d<=R), circle=Math.PI*R*R, F=frame();
+  const cov=inR.reduce((a,b)=>a+b.area,0)/circle*100, far=inR.reduce((a,b)=>a+b.area*Math.max(b.fl,1),0)/circle*100;
+  const flAvg=inR.length? inR.reduce((a,b)=>a+Math.max(b.fl,1),0)/inR.length : 0, tall=inR.slice().sort((a,b)=>b.h-a.h)[0];
+  const yrs=inR.map(b=>b.yr).filter(Boolean), nowY=new Date().getFullYear(), ageAvg=yrs.length? nowY - yrs.reduce((a,b)=>a+b,0)/yrs.length : null;
+  const dec={}; yrs.forEach(y=>{ const k=y<1980?'~1979':`${Math.floor(y/10)*10}s`; dec[k]=(dec[k]||0)+1; });
+  const decArr=Object.entries(dec).sort((a,b)=>a[0].localeCompare(b[0])), decMax=Math.max(...decArr.map(d=>d[1]),1), peak=decArr.slice().sort((a,b)=>b[1]-a[1])[0];
+  const uses={}; inR.forEach(b=>{ const k=USE[b.use]||'기타'; uses[k]=(uses[k]||0)+1; }); const useArr=Object.entries(uses).sort((a,b)=>b[1]-a[1]).slice(0,7), useMax=Math.max(...useArr.map(u=>u[1]),1);
+  const S=150/150, P=([x,y])=>`${(150+x*S).toFixed(1)},${(150-y*S).toFixed(1)}`;
+  const par=ringsOf(SEL.poly.geometry).map(r=>r.map(F.xy));
+  const svg=`<svg class="dg" viewBox="0 0 300 300" style="background:var(--bg);border:1px solid var(--line);border-radius:8px">
+    ${nb.map(b=>b.rings.map(r=>`<path d="M${r.map(P).join('L')}Z" fill="${b.own?'var(--warn)':'var(--fg)'}"/>`).join('')).join('')}
+    ${par.map(r=>`<path d="M${r.map(P).join('L')}Z" fill="none" stroke="var(--warn)" stroke-width="2"/>`).join('')}
+    <circle cx="150" cy="150" r="${R*S}" fill="none" stroke="var(--accent)" stroke-dasharray="4 3"/>
+    ${north(278,26)}<line x1="12" y1="286" x2="62" y2="286" stroke="var(--fg)" stroke-width="2"/><text x="12" y="280">50m</text></svg>`;
+  const openPct=100-cov;
+  return `<h2>도-지(Figure-ground) 다이어그램 · 300m × 300m</h2>${svg}
+    <div class="fun">🏘️ 반경 100m 안에 건물 <b>${inR.length}동</b>. ${ageAvg!=null?`평균 나이 <b>${ageAvg.toFixed(1)}년</b>, 동네가 가장 많이 지어진 때는 <b>${peak?.[0]}</b>예요.`:''} 땅의 <b>${openPct.toFixed(0)}%</b>가 비어 있는(길·마당·공지) 동네입니다.</div>
+    <div class="stat"><div><span>건폐율(실측)</span><b>${cov.toFixed(0)}%</b></div><div><span>용적률(추정)</span><b>${far.toFixed(0)}%</b></div><div><span>평균 층수</span><b>${flAvg.toFixed(1)}층</b></div></div>
+    ${tall?`<div class="note" style="margin-top:-4px">가장 높은 이웃: ${fmt(tall.h,1)}m (${tall.fl}층, ${tall.d.toFixed(0)}m 거리)</div>`:''}
+    <h2 style="margin-top:12px">주변 용도 구성</h2>${useArr.map(([k,v])=>`<div class="hbar"><span>${esc(k)}</span><div class="b"><i style="width:${v/useMax*100}%;background:#2a9d8f"></i></div><span>${v}</span></div>`).join('')}
+    <h2 style="margin-top:12px">동네 시간 지층 (준공 연대)</h2>${decArr.map(([k,v])=>`<div class="hbar"><span>${k}</span><div class="b"><i style="width:${v/decMax*100}%;background:#b45309"></i></div><span>${v}</span></div>`).join('')}
+    <div class="chips" style="margin-top:8px"><button class="btn" type="button" data-act="sky3d">3D로 보기</button><button class="btn" type="button" id="ageColor">3D를 준공 연대 색으로</button></div>
+    <div class="note">VWorld 건물정보(GIS 건물통합) 기준. 건물 중심이 원 안에 있으면 포함하는 근사 계산입니다.</div>`;
+}
+function afterContext(){ const b=$('#ageColor'); if(b) b.onclick=()=>{ $('#bColor').value='yr'; $('#bColor').onchange(); if(!ui.b3d) $('#b3d').click(); }; }
+
+// ── 하늘: 어안 다이어그램 · SVF · 태양궤적
+function skyline(){
+  if(SEL._sky) return SEL._sky;
+  const N=180, el=new Array(N).fill(0);
+  for(const b of nearBuildings(280)){ if(b.own) continue; const H=b.h-1.5; if(H<=0) continue;
+    for(const r of b.rings) for(let i=0;i<r.length-1;i++){ const [x1,y1]=r[i],[x2,y2]=r[i+1], n=Math.max(1,Math.ceil(Math.hypot(x2-x1,y2-y1)/2));
+      for(let k=0;k<=n;k++){ const x=x1+(x2-x1)*k/n, y=y1+(y2-y1)*k/n, d=Math.max(Math.hypot(x,y),1), e=Math.atan(H/d)/RAD, bi=Math.floor(((Math.atan2(x,y)/RAD+360)%360)/2)%N; if(e>el[bi]) el[bi]=e; } } }
+  const svf=el.reduce((a,e)=>a+Math.cos(e*RAD)**2,0)/N;
+  return SEL._sky={el,svf};
+}
+function tabSky(){
+  const nb0=needBld(); if(nb0) return nb0;
+  const {el,svf}=skyline(), [lng,lat]=SEL.center, R=125, C=150;
+  const pt=(az,alt)=>{ const r=(90-alt)/90*R; return [C+r*Math.sin(az*RAD), C-r*Math.cos(az*RAD)]; };
+  const skyPoly=el.map((e,i)=>pt(i*2+1,e).map(v=>v.toFixed(1)).join(',')).join(' ');
+  const days=[['하지','06-21','#dc2626'],['춘·추분','03-21','#f59e0b'],['동지','12-22','#2563eb']];
+  const paths=days.map(([n,d,col])=>{ const pts=[], dots=[];
+    for(let h=4; h<=20; h+=1/6){ const s=sunPos(kst(d,h),lat,lng), alt=s.alt/RAD, az=(s.az/RAD+180+360)%360; if(alt<0) continue; const p=pt(az,alt); pts.push(p.map(v=>v.toFixed(1)).join(','));
+      if(Math.abs(h-Math.round(h))<0.01){ const blocked = alt < el[Math.floor(az/2)%180]; dots.push(`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="${blocked?'var(--bg)':col}" stroke="${col}" stroke-width="1.3"/>`+(n==='동지'||n==='하지'?`<text x="${p[0].toFixed(1)}" y="${(p[1]-5).toFixed(1)}" text-anchor="middle" style="font-size:8px">${Math.round(h)}</text>`:'')); } }
+    return `<polyline points="${pts.join(' ')}" fill="none" stroke="${col}" stroke-width="1.6"/>${dots.join('')}`; }).join('');
+  const svg=`<svg class="dg" viewBox="0 0 300 300">
+    <circle cx="${C}" cy="${C}" r="${R}" fill="#64748b" opacity=".55"/>
+    <polygon points="${skyPoly}" fill="#bae6fd"/>
+    ${[30,60].map(a=>`<circle cx="${C}" cy="${C}" r="${(90-a)/90*R}" fill="none" stroke="#0f172a" stroke-opacity=".2" stroke-dasharray="3 3"/><text x="${C+3}" y="${C-(90-a)/90*R-2}">${a}°</text>`).join('')}
+    <circle cx="${C}" cy="${C}" r="${R}" fill="none" stroke="var(--fg)" stroke-opacity=".5"/>
+    ${[['N',0],['E',90],['S',180],['W',270]].map(([t,a])=>{ const p=pt(a,-9); return `<text x="${p[0]}" y="${p[1]+3}" text-anchor="middle" style="font-weight:700;fill:var(--fg)">${t}</text>`; }).join('')}
+    ${paths}</svg>`;
+  const word = svf>0.7?'탁 트인 하늘':svf>0.45?'적당히 둘러싸인 하늘':'건물로 꽉 막힌 골목형 하늘';
+  return `<h2>하늘 다이어그램 (어안 투영) + 태양궤적</h2>${svg}
+    <div class="legend"><span><i style="background:#bae6fd"></i>보이는 하늘</span><span><i style="background:#64748b"></i>주변 건물이 가린 하늘</span>${days.map(d=>`<span><i style="background:${d[2]}"></i>${d[0]}</span>`).join('')}<span>○ = 그 시각 해가 가려짐</span></div>
+    <div class="fun">☁️ 하늘 열림률(SVF) <b>${(svf*100).toFixed(0)}%</b> — ${word}. 필지 한가운데 서서 위를 올려다보면 하늘이 이만큼 보여요.</div>
+    ${tabSun()}`;
+}
+
+// ── 단면
+function sectionProfile(dir){
+  const nb=nearBuildings(230), par=ringsOf(SEL.poly.geometry).map(r=>r.map(frame().xy)), out=[];
+  for(let s=-150;s<=150;s+=1){ const p= dir==='NS' ? [0,s] : [s,0]; let h=0, own=false;
+    for(const b of nb){ const [x0,y0,x1,y1]=b.bb; if(p[0]<x0||p[0]>x1||p[1]<y0||p[1]>y1) continue; if(b.h>h && b.rings.some(r=>pip(p,r))){ h=b.h; own=b.own; } }
+    out.push({s,h,own,par:par.some(r=>pip(p,r))}); }
+  return out;
+}
+function sectionSvg(dir){
+  const pr=sectionProfile(dir), mx=Math.max(20,...pr.map(p=>p.h)), W=300, Hh=Math.min(150, mx*1.6+20), base=Hh-12, vs=(base-12)/mx;
+  const ps=pr.filter(p=>p.par), pa=ps.length?[ps[0].s,ps[ps.length-1].s]:null;
+  return `<svg class="dg" viewBox="0 0 ${W} ${Hh+4}">
+    ${pa?`<rect x="${pa[0]+150}" y="4" width="${pa[1]-pa[0]+1}" height="${base-4}" fill="var(--warn)" opacity=".12"/>`:''}
+    ${pr.filter(p=>p.h>0).map(p=>`<rect x="${p.s+150}" y="${(base-p.h*vs).toFixed(1)}" width="1.05" height="${(p.h*vs).toFixed(1)}" fill="${p.own?'var(--warn)':'var(--fg)'}" opacity="${p.own?1:.75}"/>`).join('')}
+    <line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="var(--fg)"/>
+    <text x="2" y="${Hh}">${dir==='NS'?'남 S':'서 W'}</text><text x="${W-2}" y="${Hh}" text-anchor="end">${dir==='NS'?'N 북':'E 동'}</text>
+    <text x="150" y="${Hh}" text-anchor="middle">대상 필지</text><text x="2" y="12">${Math.round(mx)}m</text></svg>`;
+}
+function tabSection(){
+  const nb0=needBld(); if(nb0) return nb0;
+  return `<h2>남–북 단면 (300m)</h2>${sectionSvg('NS')}<h2 style="margin-top:12px">서–동 단면 (300m)</h2>${sectionSvg('EW')}
+    <div class="fun">✂️ 필지 중심을 지나는 칼로 동네를 잘랐을 때의 스카이라인이에요. 주황색이 대상 필지의 건물, 연한 띠가 필지 범위입니다.</div>
+    <div class="note">세로 방향은 가로보다 확대되어 있습니다(높이 강조). VWorld 건물 높이 기준.</div>`;
+}
+
+// ── 매스 실험
+function massShadowImpact(){
+  const f=massFeature(); if(!f) return null;
+  const [lng,lat]=SEL.center, nb=nearBuildings(150).filter(b=>!b.own), F=frame(), hit=new Set();
+  let longest=0;
+  for(let h=9; h<=15; h+=0.5){ const sun=sunPos(kst('12-22',h),lat,lng); if(sun.alt<=0) continue; longest=Math.max(longest, f.properties.h/Math.tan(sun.alt));
+    const sh=shadowOf(f,sun,lat); if(!sh) continue; const shm=sh.map(r=>r.map(F.xy));
+    nb.forEach(b=>{ if(shm.some(r=>pip(b.c,r))) hit.add(b.f.id); }); }
+  return {n:hit.size, longest: Math.min(longest,400)};
+}
+function massResultHtml(){
+  const c=massCheck(), im=SEL.bldReady?massShadowImpact():null;
+  const tag = ok => ok==null ? '<span class="muted">상한 모름</span>' : ok ? '<span class="ok">✓ 충족</span>' : '<span class="ng">✕ 초과</span>';
+  return `<div class="stat"><div><span>높이</span><b>${c.H.toFixed(1)}m</b></div><div><span>건축면적</span><b>${fmt(c.fp)}㎡</b></div><div><span>연면적</span><b>${fmt(c.gfa)}㎡</b></div></div>
+    <dl class="kv"><dt>건폐율</dt><dd>${ui.massBc}% ${c.lg?`/ ${c.lg[0]}%`:''} ${tag(c.okB)}</dd><dt>용적률</dt><dd>${c.far.toFixed(0)}% ${c.lg?`/ ${c.lg[1]}%`:''} ${tag(c.okF)}</dd>
+    <dt>정북 이격 필요</dt><dd>최상부 기준 ${c.setback.toFixed(1)}m 이상</dd>
+    ${im?`<dt>동지 그림자</dt><dd>최대 길이 ${im.longest.toFixed(0)}m · 이웃 <b>${im.n}동</b>을 덮음 (09–15시)</dd>`:''}</dl>
+    <div class="fun">🧱 이 매스면 대략 ${Math.max(1,Math.floor(c.gfa*0.8/45))}세대(전용 45㎡·전용률 80% 가정)가 들어갈 수 있어요.</div>`;
+}
+function tabMass(){
+  if(!SEL?.poly) return wait()||'<p class="muted">필지 경계가 없습니다.</p>';
+  if(!ui.massInit) setMassLegal();
+  return `<div class="hl">층수와 건폐율을 움직여 보세요. 지도에 매스(초록=법규 충족, 빨강=초과)가 바로 바뀌고, 그림자를 켜면 매스의 그림자도 함께 계산됩니다.</div>
+    <div class="slider"><label><span>층수</span><b id="vFl">${ui.massFl}층</b></label><input id="sFl" type="range" min="1" max="25" value="${ui.massFl}"></div>
+    <div class="slider"><label><span>건폐율 (바닥 크기)</span><b id="vBc">${ui.massBc}%</b></label><input id="sBc" type="range" min="10" max="100" step="5" value="${ui.massBc}"></div>
+    <div class="slider"><label><span>층고</span><b id="vFh">${ui.massFh.toFixed(1)}m</b></label><input id="sFh" type="range" min="2.6" max="5" step="0.1" value="${ui.massFh}"></div>
+    <div class="chips"><button class="btn" type="button" data-act="legal">법정 최대로 맞추기</button><button class="btn" type="button" data-act="shadow">그림자 켜기</button></div>
+    <div id="massOut" style="margin-top:10px">${massResultHtml()}</div>
+    <div class="note">필지 모양을 건폐율만큼 축소한 바닥을 층수만큼 쌓은 단순 매스입니다. 일조사선·도로사선·주차·조경 등은 반영하지 않은 스터디용이에요.</div>`;
+}
+function afterMass(){
+  if(!ui.mass){ ui.mass=true; $('#bMass').classList.add('on'); map.setLayoutProperty('mass-3d','visibility','visible'); if(map.getPitch()<20) map.easeTo({pitch:55,bearing:-20}); updateMass(); }
+  let t; const upd=()=>{ $('#vFl').textContent=ui.massFl+'층'; $('#vBc').textContent=ui.massBc+'%'; $('#vFh').textContent=ui.massFh.toFixed(1)+'m'; updateMass(); clearTimeout(t); t=setTimeout(()=>{ const o=$('#massOut'); if(o) o.innerHTML=massResultHtml(); },120); };
+  $('#sFl').oninput=e=>{ ui.massFl=+e.target.value; upd(); };
+  $('#sBc').oninput=e=>{ ui.massBc=+e.target.value; upd(); };
+  $('#sFh').oninput=e=>{ ui.massFh=+e.target.value; upd(); };
+}
+
+// ── 3D 건물 색상 모드
+const BCOLOR = {
+  h:  ['interpolate',['linear'],['get','h'], 0,'#e6e2d8', 10,'#d6cdb8', 25,'#b9c3d6', 60,'#8496c0', 120,'#4c5f9c'],
+  yr: ['case',['>',['get','yr'],0],['interpolate',['linear'],['get','yr'], 1965,'#7c2d12', 1985,'#ea580c', 2000,'#facc15', 2010,'#84cc16', 2022,'#06b6d4'],'#cbd5e1'],
+  use:['match',['get','use'], ...Object.entries(USE_COLOR).flat(), '#d6d3d1'],
+};
+function renderBLegend(){
+  const m=$('#bColor').value, el=$('#bLegend');
+  el.innerHTML = m==='h' ? `<div class="grad" style="background:linear-gradient(90deg,#e6e2d8,#b9c3d6,#4c5f9c)"></div><div class="gl"><span>0m</span><span>25m</span><span>120m+</span></div>`
+    : m==='yr' ? `<div class="grad" style="background:linear-gradient(90deg,#7c2d12,#ea580c,#facc15,#84cc16,#06b6d4)"></div><div class="gl"><span>1965</span><span>1985</span><span>2000</span><span>2010</span><span>2022</span></div>`
+    : `<div class="legend">${Object.entries(USE_COLOR).map(([k,c])=>`<span><i style="background:${c}"></i>${USE[k]}</span>`).join('')}</div>`;
+}
+$('#bColor').onchange=()=>{ map.setPaintProperty('bldg-3d','fill-extrusion-color', BCOLOR[$('#bColor').value]); renderBLegend(); if(!ui.b3d) $('#b3d').click(); };
+renderBLegend();
+
 // ═══ 컨트롤 바인딩 ═══
 $('#fold').onclick=()=>$('#top').classList.toggle('folded');
 if(innerWidth<=760) $('#top').classList.add('folded');
@@ -683,7 +917,8 @@ $('#bMass').onclick=e=>{
   ui.mass=!ui.mass; e.target.classList.toggle('on',ui.mass);
   map.setLayoutProperty('mass-3d','visibility',ui.mass?'visible':'none');
   if(ui.mass && map.getPitch()<20) map.easeTo({pitch:55,bearing:-20});
-  updateMass(); if(SEL && TABS[curTab]?.[0]==='개요') renderSel();
+  updateMass();
+  if(SEL && ui.mass){ const i=TABS.findIndex(t=>t[0]==='매스 실험'); if(i>=0){ curTab=i; if(info.classList.contains('min')) $('#iMin').click(); renderSel(); } }
 };
 $('#days').querySelectorAll('button').forEach(b=>b.onclick=()=>{ $('#days').querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); ui.day=b.dataset.d; updateShadows(); });
 $('#hour').oninput=e=>{ ui.hour=+e.target.value; updateShadows(); };
