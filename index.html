@@ -34,7 +34,7 @@
   .cnt{margin-top:8px;font-weight:600}
   .maplibregl-popup-content{font-size:12.5px;line-height:1.55;font-family:inherit;color:#1a1a1a;max-width:250px}
   .maplibregl-popup-content b{color:var(--accent)}
-  .bld{margin-top:7px;padding:6px 8px;background:#eef2fb;border-left:3px solid var(--accent);border-radius:4px;font-size:12.5px}
+  .bld{margin:6px 0 2px;padding:6px 8px;background:#eef2fb;border-left:3px solid var(--accent);border-radius:4px;font-size:12.5px}
   .bld small{display:block;color:#888;font-size:10.5px}
   #err{position:absolute;bottom:8px;left:12px;z-index:3;background:#c62828;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;display:none;max-width:60vw}
 </style>
@@ -221,7 +221,8 @@ const dataAPI = (data,extra)=>`https://api.vworld.kr/req/data?service=data&reque
 
 async function selectParcel(feat, lngLat){
   const p=feat.properties; let ll=feat.geometry.coordinates;
-  const pop=new maplibregl.Popup({maxWidth:'300px'}).setLngLat(lngLat)
+  const MOBILE = innerWidth<=640;
+  const pop=new maplibregl.Popup({maxWidth:'300px', anchor: MOBILE ? 'top' : undefined}).setLngLat(lngLat)
     .setHTML(`<b>${p.addr}</b><br><span style="color:#888">VWorld 조회 중…</span>`).addTo(map);
 
   let pnu=null, poly={type:'FeatureCollection',features:[]};
@@ -244,7 +245,7 @@ async function selectParcel(feat, lngLat){
   if(poly.features.length){
     const b=new maplibregl.LngLatBounds();
     poly.features[0].geometry.coordinates.flat(2).forEach(c=>{if(Array.isArray(c[0]))c.forEach(x=>b.extend(x));else b.extend(c);});
-    try{ map.fitBounds(b,{padding:120,maxZoom:18,duration:400}); }catch(e){}
+    try{ map.fitBounds(b,{padding: MOBILE ? {top:70,bottom:Math.round(innerHeight*0.6),left:40,right:40} : 120, maxZoom:18,duration:400}); }catch(e){}
   }
 
   let land={};
@@ -273,6 +274,7 @@ async function selectParcel(feat, lngLat){
   pop.setHTML(
     `<b>${p.addr}</b> &nbsp;<span style="color:#888;font-size:11px">고유번호 ${p.id}</span>`+
     (pnu?`<div style="color:#888;font-size:11px">PNU ${pnu}</div>`:'')+
+    `<div class="bld">건축물대장 조회 중…</div>`+
     `<table style="border-collapse:collapse;margin-top:6px;font-size:12px">`+
     `<tr><td style="color:#888;padding:1px 8px 1px 0">항목</td><td style="color:#888">LH 연구 부록</td><td style="color:#888">VWorld·토지이음</td></tr>`+
     row('용도지역','–', uz||'–')+
@@ -285,8 +287,7 @@ async function selectParcel(feat, lngLat){
     row('개별공시지가','–', price?(+price).toLocaleString()+'원/㎡':'–')+
     `</table>`+
     `<div style="margin-top:6px;font-size:12px">주택형태 <b>${p.주택형태||'–'}</b> · 노후 ${nf(p.노후년수)}년 · 임대 ${nf(p.임대세대수)}세대`+
-    ` · OSC <b>${p.OSC공법||'미배정'}</b></div>`+
-    `<div class="bld">건축물대장 조회 중…</div>`
+    ` · OSC <b>${p.OSC공법||'미배정'}</b></div>`
   );
   // ─── data.go.kr 한 겹: 연면적 · 층수 한 줄 ───
   const el = pop.getElement()?.querySelector('.bld');
