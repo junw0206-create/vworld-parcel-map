@@ -243,7 +243,12 @@ let SEL = null;           // 선택 필지 상태
 const ui = { b3d:false, shadow:false, mass:false, day:'12-22', hour:12, colorBy:'osc', gu:'' };
 
 let readyResolve; const mapReady = new Promise(r=>readyResolve=r);
-map.on('load', () => {
+let _inited=false;
+// 'load'는 첫 타일까지 기다리므로, 스타일이 준비되는 즉시 레이어를 올림
+map.on('styledata', ()=>{ if(map.isStyleLoaded()) initLayers(); });
+map.on('load', ()=>initLayers());
+function initLayers(){
+  if(_inited) return; _inited=true;
   map.addSource('shadow', {type:'geojson', data:EMPTY});
   map.addSource('parcel', {type:'geojson', data:EMPTY});
   map.addSource('bldg',   {type:'geojson', data:EMPTY});
@@ -267,7 +272,7 @@ map.on('load', () => {
   if(DATA) initParcels();
   bindMapEvents();
   readyResolve();
-});
+}
 
 // ═══ LH 노후필지 레이어 ═══
 const OSC = {'소형':'#2e7d32','중형':'#f9a825','대형':'#c62828','':'#9ca3af'};
