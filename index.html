@@ -2,331 +2,705 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LH OSC 매입임대 노후필지</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>필지 3D 뷰어</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <!-- 키는 소스에 없음: 로컬은 .env로 만든 config.js, Vercel은 /api/config 가 채워줌 -->
 <script src="config.js"></script>
 <style>
-  :root{--bg:#fff;--fg:#1a1a1a;--panel:#f6f6f4;--line:#ddd;--accent:#1f3a93}
-  @media (prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e8e8e8;--panel:#1e2126;--line:#333}}
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%;font-family:-apple-system,"Segoe UI","Malgun Gothic",sans-serif;color:var(--fg);background:var(--bg)}
-  #map{position:absolute;inset:0}
-  .panel{position:absolute;top:12px;left:12px;z-index:2;background:var(--panel);border:1px solid var(--line);
-    border-radius:10px;padding:12px 14px;max-width:270px;box-shadow:0 2px 12px rgba(0,0,0,.15);font-size:13px}
-  .panel h1{font-size:15px;margin:0 0 4px;display:flex;justify-content:space-between;align-items:center;gap:8px}
-  #fold{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;font-size:11px;padding:2px 7px;cursor:pointer;display:none}
-  @media (max-width:640px){
-    .panel{top:8px;left:8px;right:56px;max-width:none;padding:9px 11px}
-    #fold{display:inline-block}
-    .panel.folded .body{display:none}
-    .maplibregl-popup{max-width:92vw!important}
+  :root{
+    --bg:#ffffff; --fg:#1b1d22; --muted:#6b7280; --panel:rgba(255,255,255,.96); --line:#e3e5ea; --soft:#f3f4f7;
+    --accent:#1f3a93; --accent-soft:#e8edfa; --warn:#c2410c; --ok:#15803d; --shadow:0 6px 24px rgba(15,23,42,.14);
   }
-  .panel .sub{color:#888;font-size:11px;margin-bottom:9px;line-height:1.4}
-  .sec{border-top:1px solid var(--line);margin-top:9px;padding-top:8px}
-  .sec b{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.04em}
+  :root[data-theme="dark"]{ --bg:#14161a; --fg:#e8e9ec; --muted:#9aa0aa; --panel:rgba(28,31,37,.96); --line:#30343c; --soft:#22262d; --accent:#8fa8ff; --accent-soft:#1f2a4a; }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --bg:#14161a; --fg:#e8e9ec; --muted:#9aa0aa; --panel:rgba(28,31,37,.96); --line:#30343c; --soft:#22262d; --accent:#8fa8ff; --accent-soft:#1f2a4a; } }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;font-family:-apple-system,"Pretendard","Segoe UI","Malgun Gothic",sans-serif;color:var(--fg);background:var(--bg);font-size:13px}
+  #map{position:absolute;inset:0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);backdrop-filter:blur(6px)}
+  button{font:inherit;color:inherit}
+  .btn{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:5px 9px;cursor:pointer;font-size:12px}
+  .btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .muted{color:var(--muted)}
+  h2{font-size:12px;letter-spacing:.04em;color:var(--muted);margin:0 0 6px;font-weight:600}
+
+  /* 상단 바 */
+  #top{position:absolute;top:12px;left:12px;z-index:5;width:300px;padding:10px 12px}
+  #top .t{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  #top h1{font-size:15px;margin:0}
+  #top .sub{font-size:11px;color:var(--muted);margin-top:2px}
+  #search{display:flex;gap:6px;margin-top:8px}
+  #search input{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:var(--bg);color:var(--fg);font:inherit}
+  #ctrlBody{margin-top:8px;max-height:calc(100vh - 150px);overflow:auto}
+  .sec{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
   .row{display:flex;align-items:center;gap:7px;margin:4px 0;cursor:pointer}
   .row input{margin:0}
-  .dot{width:12px;height:12px;border-radius:50%;flex:none;border:1px solid rgba(0,0,0,.25)}
-  select{width:100%;margin-top:6px;padding:5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
-  .cnt{margin-top:8px;font-weight:600}
-  .maplibregl-popup-content{font-size:12.5px;line-height:1.55;font-family:inherit;color:#1a1a1a;max-width:250px}
-  .maplibregl-popup-content b{color:var(--accent)}
-  .bld{margin:6px 0 2px;padding:6px 8px;background:#eef2fb;border-left:3px solid var(--accent);border-radius:4px;font-size:12.5px}
-  .bld small{display:block;color:#888;font-size:10.5px}
-  #err{position:absolute;bottom:8px;left:12px;z-index:3;background:#c62828;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;display:none;max-width:60vw}
+  .chips{display:flex;flex-wrap:wrap;gap:5px}
+  select{width:100%;padding:6px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+  .legend{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:6px;font-size:11.5px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px;border:1px solid rgba(0,0,0,.2)}
+  .grad{height:8px;border-radius:4px;margin-top:6px}
+  .gl{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted)}
+  #sunBox input[type=range]{width:100%}
+  #sunInfo{font-size:11.5px;margin-top:4px}
+
+  /* 정보 패널 */
+  #info{position:absolute;top:12px;right:56px;bottom:12px;z-index:5;width:380px;display:flex;flex-direction:column;overflow:hidden}
+  #info .head{padding:12px 14px 8px;border-bottom:1px solid var(--line)}
+  #info .head .addr{font-size:15px;font-weight:700;line-height:1.35}
+  #info .head .meta{font-size:11px;color:var(--muted);margin-top:2px}
+  #info .hx{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  #tabs{display:flex;gap:2px;overflow-x:auto;padding:0 8px;border-bottom:1px solid var(--line);scrollbar-width:none}
+  #tabs button{border:0;background:none;padding:9px 9px;cursor:pointer;color:var(--muted);white-space:nowrap;border-bottom:2px solid transparent;font-size:12.5px}
+  #tabs button.on{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+  #pane{flex:1;overflow:auto;padding:12px 14px 20px}
+  .kv{display:grid;grid-template-columns:110px 1fr;gap:5px 10px;font-size:12.5px}
+  .kv dt{color:var(--muted)} .kv dd{margin:0;font-weight:500}
+  .stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+  .stat div{background:var(--soft);border-radius:10px;padding:8px}
+  .stat b{display:block;font-size:16px;margin-top:2px}
+  .stat span{font-size:11px;color:var(--muted)}
+  .hl{background:var(--accent-soft);border-left:3px solid var(--accent);border-radius:6px;padding:8px 10px;margin:8px 0 12px}
+  .hl b{font-size:15px}
+  .gauge{margin:8px 0}
+  .gauge .gt{display:flex;justify-content:space-between;font-size:12px}
+  .gauge .bar{position:relative;height:9px;background:var(--soft);border-radius:5px;margin-top:4px;overflow:hidden}
+  .gauge .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--accent)}
+  .gauge .bar i.over{background:var(--warn)}
+  .hbar{display:grid;grid-template-columns:86px 1fr 34px;align-items:center;gap:6px;margin:4px 0;font-size:12px}
+  .hbar .b{height:8px;background:var(--soft);border-radius:4px;overflow:hidden}
+  .hbar .b i{display:block;height:100%;background:var(--accent);border-radius:4px}
+  table.t{width:100%;border-collapse:collapse;font-size:12px}
+  table.t th,table.t td{padding:5px 4px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  table.t th{color:var(--muted);font-weight:500}
+  .floors{display:flex;flex-direction:column-reverse;gap:2px;margin:6px 0 12px}
+  .floors div{height:16px;border-radius:3px;background:var(--accent-soft);border:1px solid var(--accent);font-size:10.5px;line-height:14px;padding:0 6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .floors div.ug{background:var(--soft);border-color:var(--muted);color:var(--muted)}
+  .strip{display:flex;height:18px;border-radius:4px;overflow:hidden;margin:6px 0 2px}
+  .strip i{flex:1}
+  .note{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .bldcard{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
+  .badge{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:10px;background:var(--soft);color:var(--muted);margin-left:4px}
+  .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #toast{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:9;background:#111827;color:#fff;padding:7px 12px;border-radius:8px;font-size:12px;display:none;max-width:86vw}
+  .maplibregl-popup-content{font-size:12.5px;line-height:1.5;color:#1b1d22;border-radius:10px;padding:10px 12px}
+  .maplibregl-popup-content .pbld{margin-top:5px;padding:5px 7px;background:#e8edfa;border-left:3px solid #1f3a93;border-radius:4px}
+
+  /* 모바일 */
+  @media (max-width:760px){
+    #top{left:8px;right:8px;width:auto;top:8px;padding:9px 10px}
+    #ctrlBody{max-height:46vh}
+    #top.folded #ctrlBody{display:none}
+    #info{left:0;right:0;top:auto;bottom:0;width:auto;height:54vh;border-radius:14px 14px 0 0}
+    #info.min{height:96px}
+    .maplibregl-ctrl-top-right{top:auto!important;bottom:calc(54vh + 8px)}
+    body.infomin .maplibregl-ctrl-top-right{bottom:104px}
+    body.noinfo .maplibregl-ctrl-top-right{bottom:20px}
+  }
+  @media (min-width:761px){ #fold{display:none} }
+  #info.hide{display:none}
 </style>
 </head>
-<body>
+<body class="noinfo">
 <div id="map"></div>
-<div id="err"></div>
-<div class="panel" id="panel">
-  <h1>OSC 매입임대 노후필지 <button id="fold" type="button">메뉴</button></h1>
-  <div class="body">
-  <div class="sub">LH 『OSC기반 매입임대주택 정비모델 연구』(2025) 부록 · <span id="n"></span>필지</div>
 
-  <div class="sec"><b>배경지도</b>
-    <label class="row"><input type="radio" name="base" value="vbase" checked> VWorld 일반</label>
-    <label class="row"><input type="radio" name="base" value="vsat"> VWorld 위성</label>
-    <label class="row"><input type="radio" name="base" value="osm"> OSM</label>
+<section id="top" class="card">
+  <div class="t">
+    <div>
+      <h1>필지 3D 뷰어</h1>
+      <div class="sub">VWorld · 건축물대장(data.go.kr) · LH 노후필지 <span id="n"></span></div>
+    </div>
+    <button id="fold" class="btn" type="button">설정</button>
   </div>
+  <form id="search" autocomplete="off">
+    <input id="q" placeholder="주소 검색 (예: 신림동 1573-28)">
+    <button class="btn" type="submit">검색</button>
+  </form>
+  <div id="ctrlBody">
+    <div class="sec">
+      <h2>보기</h2>
+      <div class="chips">
+        <button class="btn" id="b3d" type="button">3D 건물</button>
+        <button class="btn" id="bShadow" type="button">그림자</button>
+        <button class="btn" id="bMass" type="button">법정 최대 볼륨</button>
+      </div>
+      <div id="sunBox" style="display:none;margin-top:8px">
+        <div class="chips" id="days">
+          <button class="btn on" data-d="12-22" type="button">동지</button>
+          <button class="btn" data-d="03-21" type="button">춘·추분</button>
+          <button class="btn" data-d="06-21" type="button">하지</button>
+          <button class="btn" data-d="today" type="button">오늘</button>
+        </div>
+        <input id="hour" type="range" min="7" max="18" step="0.25" value="12">
+        <div id="sunInfo" class="muted"></div>
+      </div>
+    </div>
+    <div class="sec">
+      <h2>배경지도</h2>
+      <select id="base">
+        <option value="Base">VWorld 일반</option>
+        <option value="gray">VWorld 회색</option>
+        <option value="midnight">VWorld 야간</option>
+        <option value="Satellite">VWorld 위성</option>
+      </select>
+      <label class="row" style="margin-top:6px"><input type="checkbox" id="lyr-cad"> 지적도(연속지적)</label>
+      <label class="row"><input type="checkbox" id="lyr-zone"> 용도지역</label>
+    </div>
+    <div class="sec">
+      <h2>LH 노후필지 표시</h2>
+      <select id="colorBy">
+        <option value="osc">OSC 공법유형</option>
+        <option value="age">노후년수</option>
+        <option value="far">용적률(현황)</option>
+        <option value="units">임대세대수</option>
+      </select>
+      <div id="legend"></div>
+      <select id="gu" style="margin-top:8px"><option value="">전체 자치구</option></select>
+      <label class="row" style="margin-top:6px"><input type="checkbox" id="lyr-pts" checked> 필지 점 표시</label>
+    </div>
+    <div class="note">지도 아무 곳이나 클릭하면 그 필지를 조회합니다. 3D·그림자는 확대(줌 16 이상) 시 주변 건물을 불러옵니다.</div>
+  </div>
+</section>
 
-  <div class="sec"><b>중첩 레이어</b>
-    <label class="row"><input type="checkbox" id="lyr-cadastral"> 지적도(연속지적)</label>
-    <label class="row"><input type="checkbox" id="lyr-usezone"> 용도지역</label>
-    <div style="font-size:10.5px;color:#999;margin-top:3px">필지 클릭 → 경계(폴리곤) + 건축물대장 연면적·층수</div>
+<aside id="info" class="card hide">
+  <div class="head">
+    <div class="hx">
+      <div><div class="addr" id="iAddr"></div><div class="meta" id="iMeta"></div></div>
+      <div style="display:flex;gap:4px">
+        <button class="btn" id="iMin" type="button" title="접기">▾</button>
+        <button class="btn" id="iClose" type="button" title="닫기">✕</button>
+      </div>
+    </div>
   </div>
-
-  <div class="sec"><b>필지 (OSC 공법유형)</b>
-    <div id="legend"></div>
-    <select id="gu"><option value="">전체 자치구</option></select>
-    <div class="cnt" id="cnt"></div>
-  </div>
-  </div>
-</div>
+  <nav id="tabs"></nav>
+  <div id="pane"></div>
+</aside>
+<div id="toast"></div>
 
 <script>
-// ─── 인증키: 소스코드에 직접 쓰지 않음 (.env → config.js / Vercel 환경변수) ──
+// ═══ 설정 · 키 (소스코드에 직접 쓰지 않음: .env → config.js / Vercel 환경변수) ═══
 const CFG  = window.APP_CONFIG || {};
 const VKEY = CFG.VWORLD_KEY || "";
-const VDOMAIN = location.hostname || "localhost";   // VWorld 키 등록 URL(예: localhost)과 비교됨
+const VDOMAIN = location.hostname || "localhost";      // VWorld 키 등록 URL과 비교됨
+const IS_LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = (n, d=0) => (n==null || n==='' || isNaN(+n)) ? '–' : (+n).toLocaleString('ko-KR',{maximumFractionDigits:d});
+const toast = (m, ms=2600) => { const t=$('#toast'); t.textContent=m; t.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>t.style.display='none', ms); };
+if(!VKEY) toast('VWorld 키 없음 — 로컬: node tools/make-config.mjs / Vercel: VWORLD_KEY 환경변수', 8000);
 
-const DATA_URL = "data/필지_현황.geojson";
-const OSC = {'소형':'#2e7d32','중형':'#f9a825','대형':'#c62828','':'#9e9e9e'};
+// ═══ API 래퍼 ═══
+// VWorld 데이터 API는 배포 환경에서 CORS로 막히므로 /api/vworld 프록시 경유 (로컬은 직접)
+async function vw(path, params){
+  const qs = new URLSearchParams({...params, domain:VDOMAIN});
+  const url = IS_LOCAL ? `https://api.vworld.kr/${path}?${qs}&key=${VKEY}` : `api/vworld?_p=${encodeURIComponent(path)}&${qs}`;
+  const r = await fetch(url); return r.json();
+}
+const vwData = (data, extra) => vw('req/data', {service:'data', request:'GetFeature', data, format:'json', crs:'EPSG:4326', ...extra});
 
-const panel=document.getElementById('panel');
-if(matchMedia('(max-width:640px)').matches) panel.classList.add('folded');
-document.getElementById('fold').onclick=()=>panel.classList.toggle('folded');
-const showErr = m => { const e=document.getElementById('err'); e.textContent=m; e.style.display='block'; };
-if(!VKEY) showErr('VWorld 키 없음 — 로컬: node tools/make-config.mjs 실행 / Vercel: VWORLD_KEY 환경변수 확인');
-
-// ─── 스타일: 배경지도 3종 ──────────────────────────────────────────
-const vworldTile = t => `https://api.vworld.kr/req/wmts/1.0.0/${VKEY}/${t}/{z}/{y}/{x}.${t==='Satellite'?'jpeg':'png'}`;
-const bases = {
-  vbase:{tiles:[vworldTile('Base')], attribution:'© VWorld'},
-  vsat :{tiles:[vworldTile('Satellite'), vworldTile('Hybrid')], attribution:'© VWorld'},
-  osm  :{tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], attribution:'© OpenStreetMap'}
-};
-function styleFor(key){
-  const b=bases[key];
-  const src={}, layers=[];
-  b.tiles.forEach((url,i)=>{
-    src['b'+i]={type:'raster',tiles:[url],tileSize:256,attribution:b.attribution};
-    layers.push({id:'b'+i,type:'raster',source:'b'+i});
-  });
-  return {version:8, sources:src, layers};
+// data.go.kr 건축HUB 건축물대장 — PNU 19자리 = 시군구5+법정동5+대지구분1(1일반/2산)+본번4+부번4
+async function bld(op, pnu){
+  const q = new URLSearchParams({ sigunguCd:pnu.slice(0,5), bjdongCd:pnu.slice(5,10), platGbCd:pnu[10]==='2'?'1':'0', bun:pnu.slice(11,15), ji:pnu.slice(15,19) });
+  const url = CFG.DATA_GO_KR_KEY
+    ? `https://apis.data.go.kr/1613000/BldRgstHubService/${op}?serviceKey=${encodeURIComponent(CFG.DATA_GO_KR_KEY)}&_type=json&numOfRows=100&pageNo=1&${q}`
+    : `api/bld?op=${op}&${q}`;
+  try{
+    const txt = await (await fetch(url)).text();
+    let j; try{ j=JSON.parse(txt); }catch(e){ j={error:txt.slice(0,200)}; }
+    console.log(`[data.go.kr ${op}]`, pnu, j);   // ← F12 콘솔에서 응답 확인
+    let it = j?.response?.body?.items?.item;
+    if(!it) return [];
+    return Array.isArray(it) ? it : [it];
+  }catch(e){ console.warn(op, e); return []; }
 }
 
-const map = new maplibregl.Map({container:'map', style:styleFor('vbase'), center:[126.98,37.54], zoom:10});
+// ═══ 지도 ═══
+const BASES = ['Base','gray','midnight','Satellite'];
+const wmts = t => `https://api.vworld.kr/req/wmts/1.0.0/${VKEY}/${t}/{z}/{y}/{x}.${t==='Satellite'?'jpeg':'png'}`;
+const wms = layer => `https://api.vworld.kr/req/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=${layer}&STYLES=${layer}`
+  + `&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png&TRANSPARENT=true&KEY=${VKEY}&DOMAIN=${encodeURIComponent(VDOMAIN)}`;
+const style = { version:8, sources:{}, layers:[] };
+[...BASES,'Hybrid'].forEach(t=>{
+  style.sources['b-'+t] = {type:'raster', tiles:[wmts(t)], tileSize:256, maxzoom:19, attribution:'© VWorld'};
+  style.layers.push({id:'b-'+t, type:'raster', source:'b-'+t, layout:{visibility: t==='Base'?'visible':'none'}});
+});
+style.sources['ov-cad']  = {type:'raster', tiles:[wms('lp_pa_cbnd_bubun')], tileSize:256};
+style.sources['ov-zone'] = {type:'raster', tiles:[wms('lt_c_uq111')], tileSize:256};
+style.layers.push({id:'ov-zone', type:'raster', source:'ov-zone', layout:{visibility:'none'}, paint:{'raster-opacity':.45}});
+style.layers.push({id:'ov-cad',  type:'raster', source:'ov-cad',  layout:{visibility:'none'}, paint:{'raster-opacity':.85}});
+
+const map = new maplibregl.Map({ container:'map', style, center:[126.98,37.54], zoom:10.5, maxPitch:70, attributionControl:{compact:true} });
 window.map = map;
-map.addControl(new maplibregl.NavigationControl(),'top-right');
-map.addControl(new maplibregl.ScaleControl({maxWidth:100,unit:'metric'}));
+map.addControl(new maplibregl.NavigationControl({visualizePitch:true}), 'top-right');
+map.addControl(new maplibregl.GeolocateControl({positionOptions:{enableHighAccuracy:true}}), 'top-right');
+map.addControl(new maplibregl.ScaleControl({maxWidth:100, unit:'metric'}), 'bottom-left');
 
-let DATA=null;
+const EMPTY = {type:'FeatureCollection', features:[]};
+let DATA = null;          // LH 노후필지
+let SEL = null;           // 선택 필지 상태
+const ui = { b3d:false, shadow:false, mass:false, day:'12-22', hour:12, colorBy:'osc', gu:'' };
 
-// ─── WMS 래스터 소스(EPSG:3857 bbox) ──────────────────────────────
-function wmsTiles(layer){
-  return `https://api.vworld.kr/req/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0`
-       + `&LAYERS=${layer}&STYLES=${layer}&CRS=EPSG:3857&BBOX={bbox-epsg-3857}`
-       + `&WIDTH=256&HEIGHT=256&FORMAT=image/png&TRANSPARENT=true`
-       + `&KEY=${VKEY}&DOMAIN=${encodeURIComponent(VDOMAIN)}`;
+map.on('load', () => {
+  map.addSource('shadow', {type:'geojson', data:EMPTY});
+  map.addSource('parcel', {type:'geojson', data:EMPTY});
+  map.addSource('bldg',   {type:'geojson', data:EMPTY});
+  map.addSource('selbldg',{type:'geojson', data:EMPTY});
+  map.addSource('mass',   {type:'geojson', data:EMPTY});
+  map.addSource('pts',    {type:'geojson', data:EMPTY});
+
+  map.addLayer({id:'shadow', type:'fill', source:'shadow', layout:{visibility:'none'}, paint:{'fill-color':'#0b1020','fill-opacity':.28}});
+  map.addLayer({id:'parcel-fill', type:'fill', source:'parcel', paint:{'fill-color':'#1f3a93','fill-opacity':.16}});
+  map.addLayer({id:'parcel-line', type:'line', source:'parcel', paint:{'line-color':'#1f3a93','line-width':2.6}});
+  map.addLayer({id:'bldg-3d', type:'fill-extrusion', source:'bldg', layout:{visibility:'none'}, paint:{
+    'fill-extrusion-color':['interpolate',['linear'],['get','h'], 0,'#e6e2d8', 10,'#d6cdb8', 25,'#b9c3d6', 60,'#8496c0', 120,'#4c5f9c'],
+    'fill-extrusion-height':['get','h'], 'fill-extrusion-base':0, 'fill-extrusion-opacity':.92 }});
+  map.addLayer({id:'selbldg-3d', type:'fill-extrusion', source:'selbldg', layout:{visibility:'none'}, paint:{
+    'fill-extrusion-color':'#f59e0b', 'fill-extrusion-height':['get','h'], 'fill-extrusion-opacity':.95 }});
+  map.addLayer({id:'mass-3d', type:'fill-extrusion', source:'mass', layout:{visibility:'none'}, paint:{
+    'fill-extrusion-color':'#ef4444', 'fill-extrusion-height':['get','h'], 'fill-extrusion-opacity':.33 }});
+  map.addLayer({id:'pts', type:'circle', source:'pts', paint:{
+    'circle-radius':['interpolate',['linear'],['zoom'],9,3,13,5.5,16,8],
+    'circle-color':colorExpr('osc'), 'circle-stroke-width':1.2, 'circle-stroke-color':'#fff', 'circle-opacity':.92 }});
+  if(DATA) initParcels();
+  bindMapEvents();
+});
+
+// ═══ LH 노후필지 레이어 ═══
+const OSC = {'소형':'#2e7d32','중형':'#f9a825','대형':'#c62828','':'#9ca3af'};
+const RAMPS = {
+  age:  {k:'노후년수', stops:[15,'#fde68a',25,'#f97316',35,'#b91c1c'], unit:'년', label:'노후년수'},
+  far:  {k:'용적률',   stops:[50,'#bfdbfe',150,'#3b82f6',250,'#1e3a8a'], unit:'%', label:'용적률(현황)'},
+  units:{k:'임대세대수',stops:[2,'#d9f99d',10,'#22c55e',20,'#14532d'], unit:'세대', label:'임대세대수'},
+};
+function colorExpr(mode){
+  if(mode==='osc') return ['match',['get','OSC공법'],'소형',OSC['소형'],'중형',OSC['중형'],'대형',OSC['대형'],OSC['']];
+  const r=RAMPS[mode];
+  return ['case',['has',r.k],['interpolate',['linear'],['get',r.k],...r.stops],'#c7c9ce'];
 }
-const OVERLAYS = {
-  'lyr-cadastral':{id:'ov-cadastral', layer:'lp_pa_cbnd_bubun', opacity:0.85},
-  'lyr-usezone'  :{id:'ov-usezone',   layer:'lt_c_uq111',       opacity:0.45}
+function renderLegend(){
+  const el=$('#legend'), m=ui.colorBy;
+  if(m==='osc'){
+    el.innerHTML = '<div class="legend">'+Object.entries({'소형패널':'소형','중형패널':'중형','대형패널':'대형','미배정':''})
+      .map(([l,k])=>`<span><i style="background:${OSC[k]}"></i>${l}</span>`).join('')+'</div>';
+  }else{
+    const r=RAMPS[m], s=r.stops;
+    el.innerHTML = `<div class="grad" style="background:linear-gradient(90deg,${s[1]},${s[3]},${s[5]})"></div>`
+      + `<div class="gl"><span>${s[0]}${r.unit}</span><span>${s[2]}</span><span>${s[4]}${r.unit}+</span></div>`
+      + `<div class="legend"><span><i style="background:#c7c9ce"></i>값 없음</span></div>`;
+  }
+}
+function applyFilter(){
+  if(!map.getLayer('pts')) return;
+  map.setFilter('pts', ui.gu ? ['==',['get','gu'],ui.gu] : null);
+  map.setPaintProperty('pts','circle-color', colorExpr(ui.colorBy));
+  renderLegend();
+  if(!SEL) renderDashboard();
+}
+function initParcels(){
+  map.getSource('pts').setData(DATA);
+  const xs=DATA.features.map(f=>f.geometry.coordinates[0]), ys=DATA.features.map(f=>f.geometry.coordinates[1]);
+  const mobile = innerWidth<=760;
+  map.fitBounds([[Math.min(...xs),Math.min(...ys)],[Math.max(...xs),Math.max(...ys)]],
+    {padding: mobile ? {top:150,left:20,right:20,bottom:40} : {top:40,left:340,right:450,bottom:40}, duration:0});
+  applyFilter();
+}
+fetch('data/parcels.geojson').then(r=>r.json()).then(fc=>{
+  DATA=fc; $('#n').textContent=`(${fc.features.length}필지)`;
+  const sel=$('#gu'); [...new Set(fc.features.map(f=>f.properties.gu))].sort().forEach(g=>sel.add(new Option(g,g)));
+  if(map.getSource('pts')) initParcels();
+  renderDashboard();
+}).catch(e=>toast('필지 데이터 로드 실패: '+e.message, 6000));
+
+// ═══ 정보 패널 ═══
+const info=$('#info');
+function showInfo(){ info.classList.remove('hide','min'); document.body.classList.remove('noinfo','infomin'); }
+$('#iClose').onclick=()=>{ clearSelection(); };
+$('#iMin').onclick=()=>{ const m=info.classList.toggle('min'); document.body.classList.toggle('infomin',m); $('#iMin').textContent=m?'▴':'▾'; };
+let TABS=[], curTab=0;
+function setTabs(list){
+  TABS=list; if(curTab>=list.length) curTab=0;
+  $('#tabs').innerHTML = list.map((t,i)=>`<button type="button" class="${i===curTab?'on':''}" data-i="${i}">${t[0]}</button>`).join('');
+  $('#tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{ curTab=+b.dataset.i; setTabs(TABS); if(innerWidth<=760 && info.classList.contains('min')) $('#iMin').click(); });
+  $('#pane').innerHTML = list[curTab][1]();
+  $('#pane').querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>ACTIONS[b.dataset.act]?.(b));
+}
+const ACTIONS = {
+  mass: ()=>$('#bMass').click(),
+  shadow: ()=>{ if(!ui.shadow) $('#bShadow').click(); },
+  zoom: ()=>{ if(SEL?.bounds) map.fitBounds(SEL.bounds,{padding:fitPad(),maxZoom:18}); },
 };
 
-function addOverlays(){
-  for(const k in OVERLAYS){
-    const o=OVERLAYS[k];
-    if(map.getSource(o.id)) continue;
-    map.addSource(o.id,{type:'raster',tiles:[wmsTiles(o.layer)],tileSize:256});
-    map.addLayer({id:o.id,type:'raster',source:o.id,layout:{visibility:'none'},paint:{'raster-opacity':o.opacity}});
-    const cb=document.getElementById(k);
-    cb.onchange=()=>map.setLayoutProperty(o.id,'visibility',cb.checked?'visible':'none');
-    if(cb.checked) map.setLayoutProperty(o.id,'visibility','visible');
-  }
+// 대시보드 (선택 없음)
+function renderDashboard(){
+  if(!DATA) return;
+  info.classList.remove('hide'); document.body.classList.remove('noinfo');
+  if(innerWidth<=760){ info.classList.add('min'); document.body.classList.add('infomin'); $('#iMin').textContent='▴'; }
+  const fs = DATA.features.filter(f=>!ui.gu || f.properties.gu===ui.gu).map(f=>f.properties);
+  $('#iAddr').textContent = ui.gu ? `${ui.gu} 노후필지 현황` : '서울 LH 매입임대 노후필지 현황';
+  $('#iMeta').textContent = 'LH 『OSC기반 매입임대주택 정비모델 연구』(2025) 부록 · 필지를 누르면 상세 조회';
+  const avg = k => { const v=fs.map(p=>p[k]).filter(x=>x!=null); return v.length? v.reduce((a,b)=>a+b,0)/v.length : null; };
+  const count = (k) => { const m={}; fs.forEach(p=>{ const v=p[k]||'미상'; m[v]=(m[v]||0)+1; }); return Object.entries(m).sort((a,b)=>b[1]-a[1]); };
+  const bars = (arr, color) => { const mx=Math.max(...arr.map(a=>a[1]),1); return arr.map(([k,v])=>`<div class="hbar"><span>${esc(k)}</span><div class="b"><i style="width:${v/mx*100}%;${color?`background:${color(k)}`:''}"></i></div><span>${v}</span></div>`).join(''); };
+  const ageBins=[['20년 미만',0,20],['20–25년',20,25],['25–30년',25,30],['30–35년',30,35],['35년 이상',35,99]]
+    .map(([l,a,b])=>[l, fs.filter(p=>p.노후년수!=null && p.노후년수>=a && p.노후년수<b).length]);
+  const overview = () => `
+    <div class="stat">
+      <div><span>필지 수</span><b>${fmt(fs.length)}</b></div>
+      <div><span>평균 노후</span><b>${fmt(avg('노후년수'),1)}년</b></div>
+      <div><span>평균 용적률</span><b>${fmt(avg('용적률'))}%</b></div>
+      <div><span>평균 대지</span><b>${fmt(avg('대지면적'))}㎡</b></div>
+      <div><span>평균 건폐율</span><b>${fmt(avg('건폐율'))}%</b></div>
+      <div><span>임대세대 합</span><b>${fmt(fs.reduce((a,p)=>a+(p.임대세대수||0),0))}</b></div>
+    </div>
+    <h2>OSC 공법유형</h2>${bars(count('OSC공법').map(([k,v])=>[k==='미상'?'미배정':k+'패널',v]), k=>OSC[k.replace('패널','')]||OSC[''])}
+    <h2 style="margin-top:12px">노후년수 분포</h2>${bars(ageBins, ()=> '#f97316')}
+    <div class="note">건축 속성(대지·건폐율·용적률·노후년수)은 ${fs.filter(p=>p.노후년수!=null).length}필지에만 있습니다. 나머지는 연구 부록 표 매칭 실패분.</div>`;
+  const byGu = () => `<h2>자치구별 필지 수</h2>${bars(count('gu').slice(0,25))}`;
+  const byType = () => `<h2>주택형태</h2>${bars(count('주택형태'))}<h2 style="margin-top:12px">신규 임대유형</h2>${bars(count('신규임대유형'))}<h2 style="margin-top:12px">지형</h2>${bars(count('지형높이'))}<h2 style="margin-top:12px">도로접면</h2>${bars(count('도로접면').slice(0,8))}`;
+  const help = () => `
+    <div class="kv"><dt>필지 클릭</dt><dd>경계·토지특성·건축물대장 조회</dd><dt>3D 건물</dt><dd>VWorld 건물정보(높이·층수)로 돌출</dd>
+    <dt>그림자</dt><dd>날짜·시각별 태양 위치로 그림자 계산, 선택 필지 동지 일조시간 분석</dd><dt>법정 최대 볼륨</dt><dd>용도지역 상한(건폐율·용적률)으로 낼 수 있는 매스</dd>
+    <dt>주소 검색</dt><dd>서울 외 전국 지번 검색 가능</dd><dt>F12 콘솔</dt><dd>data.go.kr 응답 원문 확인</dd></div>
+    <div class="note">데이터: VWorld(지도·연속지적·건물정보·토지특성), 국토교통부 건축HUB 건축물대장(data.go.kr), LH 토지주택연구원 연구 부록.</div>`;
+  setTabs([['개요',overview],['자치구',byGu],['유형',byType],['사용법',help]]);
 }
 
-// ─── 필지 포인트 + 클릭 시 폴리곤 ─────────────────────────────────
-function addParcels(){
-  map.addSource('parcels',{type:'geojson',data:DATA});
-  map.addSource('parcel-poly',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
-  map.addLayer({id:'poly-fill',type:'fill',source:'parcel-poly',
-    paint:{'fill-color':'#1f3a93','fill-opacity':0.18}});
-  map.addLayer({id:'poly-line',type:'line',source:'parcel-poly',
-    paint:{'line-color':'#1f3a93','line-width':2.5}});
-  map.addLayer({id:'pts',type:'circle',source:'parcels',
-    paint:{
-      'circle-radius':['interpolate',['linear'],['zoom'],9,3,13,5.5,16,9],
-      'circle-color':['match',['get','OSC공법'],'소형',OSC['소형'],'중형',OSC['중형'],'대형',OSC['대형'],OSC['']],
-      'circle-stroke-width':1.2,'circle-stroke-color':'#fff','circle-opacity':0.92
-    }});
+// ═══ 필지 선택 ═══
+function fitPad(){ return innerWidth<=760 ? {top:150,bottom:Math.round(innerHeight*0.56),left:30,right:30} : {top:60,bottom:60,left:340,right:460}; }
+let popup=null, selSeq=0;
+function clearSelection(){
+  SEL=null; popup?.remove();
+  ['parcel','selbldg','mass'].forEach(s=>map.getSource(s)?.setData(EMPTY));
+  curTab=0; renderDashboard(); updateShadows();
+}
+async function selectAt({lngLat, feat}){
+  const seq=++selSeq;
+  const research = feat ? feat.properties : null;
+  let ll = lngLat ? [lngLat.lng, lngLat.lat] : feat.geometry.coordinates;
+  let pnu=null, poly=null, addr=research ? '서울특별시 '+research.addr : '';
+  SEL = {loading:true, research, addr, pnu:null};
+  showInfo(); curTab=0; renderSel();
+  popup?.remove();
+  popup = new maplibregl.Popup({maxWidth:'260px', anchor: innerWidth<=760?'top':undefined, offset:8})
+    .setLngLat(ll).setHTML(`<b>${esc(addr||'필지 조회 중')}</b><div class="pbld"><span class="spin"></span> 조회 중…</div>`).addTo(map);
+  try{
+    if(research){   // LH 필지: 점 좌표가 동 단위 근사값 → 주소로 정확한 PNU
+      const s = await vw('req/search', {service:'search',request:'search',version:'2.0',crs:'EPSG:4326',size:1,page:1,type:'address',category:'parcel',format:'json',errorformat:'json',query:addr});
+      const it=s?.response?.result?.items?.[0];
+      if(it){ pnu=it.id; ll=[+it.point.x,+it.point.y]; }
+    }
+    const r = await vwData('LP_PA_CBND_BUBUN', pnu ? {attrFilter:`pnu:=:${pnu}`, geometry:true, size:1} : {geomFilter:`POINT(${ll[0]} ${ll[1]})`, geometry:true, size:1});
+    const f = r?.response?.result?.featureCollection?.features?.[0];
+    if(f){ poly=f; pnu=pnu||f.properties.pnu; addr = addr || f.properties.addr; SEL.jiga=f.properties.jiga; }
+    if(r?.response?.status==='ERROR') toast('VWorld: '+(r.response.error?.text||'오류'));
+  }catch(e){ console.warn('필지 조회 실패', e); }
+  if(seq!==selSeq) return;
+  if(!pnu){ SEL.loading=false; SEL.error='이 위치의 필지를 찾지 못했습니다.'; renderSel(); popup.setHTML('필지 없음'); return; }
 
-  const guSel=document.getElementById('gu');
-  [...new Set(DATA.features.map(f=>f.properties.gu))].sort().forEach(g=>{
-    const o=document.createElement('option');o.value=g;o.textContent=g;guSel.appendChild(o);});
-
-  function apply(){
-    const gu=guSel.value;
-    const ks=[...document.querySelectorAll('#legend input:checked')].map(i=>i.dataset.k);
-    map.setFilter('pts',['all',
-      ['in',['get','OSC공법'],['literal',ks]],
-      gu?['==',['get','gu'],gu]:['literal',true]]);
-    const c=DATA.features.filter(x=>ks.includes(x.properties['OSC공법'])&&(!gu||x.properties.gu===gu)).length;
-    document.getElementById('cnt').textContent=c+' 필지 표시 중';
+  Object.assign(SEL, {pnu, addr, poly});
+  map.getSource('parcel').setData(poly ? {type:'FeatureCollection',features:[poly]} : EMPTY);
+  if(poly){
+    const b=new maplibregl.LngLatBounds(); ringsOf(poly.geometry).flat().forEach(c=>b.extend(c));
+    SEL.bounds=b; SEL.center=centroid(ringsOf(poly.geometry)[0]);
+    popup.setLngLat(SEL.center);
+    map.fitBounds(b,{padding:fitPad(), maxZoom:18, duration:600});
   }
-  guSel.onchange=apply;
-  document.querySelectorAll('#legend input').forEach(i=>i.onchange=apply);
-  apply();
+  renderSel();
 
-  map.on('click','pts',e=>selectParcel(e.features[0], e.lngLat));
+  // 병렬 조회
+  const yr=new Date().getFullYear();
+  const landP = (async()=>{ for(const y of [yr,yr-1,yr-2]){ const j=await vw('ned/data/getLandCharacteristics',{pnu,stdrYear:y,format:'json',numOfRows:1,pageNo:1}).catch(()=>null);
+      const f=j?.landCharacteristicss?.field?.[0]; if(f) return f; } return null; })();
+  const [land, titles, floors, jijigu, recap, hsprc] = await Promise.all([landP, bld('getBrTitleInfo',pnu), bld('getBrFlrOulnInfo',pnu), bld('getBrJijiguInfo',pnu), bld('getBrRecapTitleInfo',pnu), bld('getBrHsprcInfo',pnu)]);
+  if(seq!==selSeq) return;
+  Object.assign(SEL, {land, titles, floors, jijigu, recap, hsprc, loading:false});
+  // 팝업: data.go.kr 한 겹 (연면적·층수 한 줄)
+  const m = mainBld(titles);
+  popup.setHTML(`<b>${esc(addr)}</b>` + (m
+    ? `<div class="pbld">연면적 <b>${fmt(m.totArea,2)}㎡</b> · 지상 <b>${m.grndFlrCnt}층</b>${+m.ugrndFlrCnt?` / 지하 ${m.ugrndFlrCnt}층`:''}<br><span style="color:#6b7280;font-size:11px">건축물대장 표제부 · ${esc(m.mainPurpsCdNm)} · data.go.kr</span></div>`
+    : `<div class="pbld">건축물대장: 등록된 건축물 없음</div>`));
+  renderSel();
+  updateMass();
+  if(poly) await ensureBuildings(paddedBbox(SEL.bounds, 180));
+  if(seq!==selSeq) return;
+  markSelBuildings(); updateShadows(); if(TABS[curTab]?.[0]==='일조') renderSel();
+}
+function mainBld(t){ if(!t?.length) return null; const m=t.filter(i=>String(i.mainAtchGbCdNm||'').includes('주')); return (m.length?m:t).slice().sort((a,b)=>(+b.totArea||0)-(+a.totArea||0))[0]; }
+
+const LEGAL = { '제1종전용주거':[50,100],'제2종전용주거':[40,120],'제1종일반주거':[60,150],'제2종일반주거':[60,200],'제3종일반주거':[50,250],
+  '준주거':[60,400],'중심상업':[60,1000],'일반상업':[60,800],'근린상업':[60,600],'유통상업':[60,600],'전용공업':[60,200],'일반공업':[60,200],'준공업':[60,400],
+  '보전녹지':[20,50],'생산녹지':[20,50],'자연녹지':[20,50] };  // 서울시 도시계획조례 기준
+function legalOf(uz){ uz=String(uz||''); for(const k in LEGAL) if(uz.includes(k)) return LEGAL[k]; return null; }
+function gauge(label, now, max){
+  if(max==null) return `<div class="gauge"><div class="gt"><span>${label}</span><span>${now!=null?fmt(now,1)+'%':'–'}</span></div></div>`;
+  const pct = now!=null ? Math.min(now/max*100,100) : 0;
+  return `<div class="gauge"><div class="gt"><span>${label}</span><span>${now!=null?`<b>${fmt(now,1)}%</b>`:'–'} <span class="muted">/ 법정 ${max}%</span></span></div>
+    <div class="bar"><i class="${now>max?'over':''}" style="width:${pct}%"></i></div></div>`;
+}
+function renderSel(){
+  const S=SEL; if(!S) return;
+  $('#iAddr').textContent = S.addr || '필지 조회 중…';
+  $('#iMeta').innerHTML = (S.pnu?`PNU ${S.pnu}`:'') + (S.research?` <span class="badge">LH 노후필지 #${esc(S.research.id)}</span>`:'') + (S.loading?' <span class="spin"></span>':'');
+  if(S.error){ $('#tabs').innerHTML=''; $('#pane').innerHTML=`<p>${esc(S.error)}</p>`; return; }
+  const tabs=[['개요',tabOverview],['건축물',tabBuilding],['층별',tabFloors],['일조',tabSun]];
+  if(S.research) tabs.push(['LH 연구',tabResearch]);
+  if(S.research?.시설) tabs.push(['주변시설',tabFac]);
+  setTabs(tabs);
+}
+const wait = () => SEL.loading ? '<p class="muted"><span class="spin"></span> 불러오는 중…</p>' : '';
+function tabOverview(){
+  const S=SEL, L=S.land||{}, m=mainBld(S.titles);
+  const uz = L.prposArea1Nm || ''; const lg=legalOf(uz);
+  const area = +L.lndpclAr || null, price = +L.pblntfPclnd || +S.jiga || null;
+  const zones = (S.jijigu||[]).map(j=>j.jijiguCdNm||j.etcJijigu).filter(Boolean);
+  return wait() + (m ? `<div class="hl">연면적 <b>${fmt(m.totArea,2)}㎡</b> · 지상 <b>${m.grndFlrCnt}층</b>${+m.ugrndFlrCnt?` / 지하 ${m.ugrndFlrCnt}층`:''}
+      <div class="muted" style="font-size:11px">${esc(m.mainPurpsCdNm)} · ${esc(m.strctCdNm)} · 높이 ${fmt(m.heit,1)}m · data.go.kr 건축물대장</div></div>` : (S.loading?'':'<div class="hl">건축물대장에 등록된 건축물이 없습니다 (나대지·공지 등)</div>'))
+  + `<div class="stat">
+      <div><span>토지면적</span><b>${fmt(area,1)}㎡</b></div>
+      <div><span>공시지가</span><b>${price?fmt(price/10000,0)+'만':'–'}</b><span>원/㎡</span></div>
+      <div><span>토지 추정가</span><b>${area&&price?fmt(area*price/1e8,1)+'억':'–'}</b></div></div>
+    <dl class="kv">
+      <dt>용도지역</dt><dd>${esc(uz||'–')}${L.prposArea2Nm&&L.prposArea2Nm!=='지정되지않음'?' · '+esc(L.prposArea2Nm):''}</dd>
+      <dt>지목</dt><dd>${esc(L.lndcgrCodeNm||'–')}</dd>
+      <dt>토지이용상황</dt><dd>${esc(L.ladUseSittnNm||'–')}</dd>
+      <dt>지형 높이·형상</dt><dd>${esc(L.tpgrphHgCodeNm||'–')} · ${esc(L.tpgrphFrmCodeNm||'–')}</dd>
+      <dt>도로접면</dt><dd>${esc(L.roadSideCodeNm||'–')}</dd>
+      <dt>지역·지구</dt><dd>${zones.length?zones.map(esc).join(', '):'–'}</dd>
+      <dt>기준연도</dt><dd>${esc(L.stdrYear||'–')}</dd>
+    </dl>
+    <h2 style="margin-top:14px">건폐율 · 용적률 (현황 / 법정 상한)</h2>
+    ${gauge('건폐율', m?+m.bcRat||null:null, lg?.[0])}${gauge('용적률', m?+m.vlRat||null:null, lg?.[1])}
+    ${lg&&area?`<div class="note">법정 상한으로 지을 수 있는 최대: 건축면적 ${fmt(area*lg[0]/100)}㎡, 연면적 ${fmt(area*lg[1]/100)}㎡ (약 ${Math.floor(lg[1]/lg[0])}층)</div>`:''}
+    <div class="chips" style="margin-top:10px">
+      <button class="btn ${ui.mass?'on':''}" data-act="mass" type="button">법정 최대 볼륨 3D</button>
+      <button class="btn" data-act="shadow" type="button">그림자 보기</button>
+      <button class="btn" data-act="zoom" type="button">필지로 이동</button></div>`;
+}
+function age(d){ if(!d||String(d).length<8) return null; const s=String(d); const t=new Date(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8)); return (Date.now()-t)/31557600000; }
+const ymd = d => d&&String(d).trim().length>=8 ? `${String(d).slice(0,4)}.${String(d).slice(4,6)}.${String(d).slice(6,8)}` : '–';
+function tabBuilding(){
+  const S=SEL; if(S.loading) return wait();
+  const t=S.titles||[]; if(!t.length) return '<p class="muted">건축물대장 표제부 자료가 없습니다.</p>';
+  const rc=S.recap?.[0], hp=(S.hsprc||[]).slice().sort((a,b)=>String(b.crtnDay).localeCompare(String(a.crtnDay)))[0];
+  return (rc?`<div class="hl">총괄표제부 · ${esc(rc.bldNm||'')} 동 ${fmt(rc.mainBldCnt)}개 · 연면적 합 <b>${fmt(rc.totArea,1)}㎡</b> · 세대 ${fmt(rc.hhldCnt)}</div>`:'')
+   + (hp?`<div class="hl">주택공시가격 <b>${fmt(+hp.hsprc/1e8,2)}억원</b> <span class="muted">(${ymd(hp.crtnDay)} 기준)</span></div>`:'')
+   + t.slice().sort((a,b)=>(+b.totArea||0)-(+a.totArea||0)).map(b=>{
+    const a=age(b.useAprDay), park=(+b.indrAutoUtcnt||0)+(+b.oudrAutoUtcnt||0)+(+b.indrMechUtcnt||0)+(+b.oudrMechUtcnt||0);
+    return `<div class="bldcard"><b>${esc((b.bldNm||'').trim()||'(건물명 없음)')}${(b.dongNm||'').trim()?' '+esc(b.dongNm):''}</b><span class="badge">${esc(b.mainAtchGbCdNm||'')}</span><span class="badge">${esc(b.regstrKindCdNm||'')}</span>
+      <dl class="kv" style="margin-top:6px">
+        <dt>주용도</dt><dd>${esc(b.mainPurpsCdNm||'–')}${b.etcPurps&&b.etcPurps.trim()?` <span class="muted">(${esc(b.etcPurps.trim())})</span>`:''}</dd>
+        <dt>구조 · 지붕</dt><dd>${esc(b.strctCdNm||'–')} · ${esc(b.roofCdNm||'–')}</dd>
+        <dt>층수 · 높이</dt><dd>지상 ${fmt(b.grndFlrCnt)} / 지하 ${fmt(b.ugrndFlrCnt)} · ${fmt(b.heit,1)}m</dd>
+        <dt>대지 · 건축면적</dt><dd>${fmt(b.platArea,1)}㎡ · ${fmt(b.archArea,1)}㎡</dd>
+        <dt>연면적</dt><dd>${fmt(b.totArea,2)}㎡ <span class="muted">(용적률산정 ${fmt(b.vlRatEstmTotArea,1)}㎡)</span></dd>
+        <dt>건폐율 · 용적률</dt><dd>${fmt(b.bcRat,2)}% · ${fmt(b.vlRat,2)}%</dd>
+        <dt>세대 · 가구 · 호</dt><dd>${fmt(b.hhldCnt)} · ${fmt(b.fmlyCnt)} · ${fmt(b.hoCnt)}</dd>
+        <dt>승강기 · 주차</dt><dd>${fmt((+b.rideUseElvtCnt||0)+(+b.emgenUseElvtCnt||0))}대 · ${fmt(park)}대</dd>
+        <dt>사용승인일</dt><dd>${ymd(b.useAprDay)}${a!=null?` <span class="muted">(${a.toFixed(1)}년 경과)</span>`:''}</dd>
+        <dt>내진설계</dt><dd>${esc(b.rserthqkDsgnApplyYn==='1'?'적용':b.rserthqkDsgnApplyYn==='0'?'미적용':'–')}</dd>
+      </dl></div>`;}).join('') + '<div class="note">출처: 국토교통부 건축HUB 건축물대장정보 서비스(표제부·총괄표제부·주택가격)</div>';
+}
+function tabFloors(){
+  const S=SEL; if(S.loading) return wait();
+  const f=S.floors||[]; if(!f.length) return '<p class="muted">층별개요 자료가 없습니다.</p>';
+  const key=x=>(x.flrGbCdNm==='지하'?-1:1)*(+x.flrNo||0);
+  const rows=f.slice().sort((a,b)=>key(b)-key(a));
+  const byFloor={}; rows.forEach(r=>{ const k=r.flrNoNm||key(r); (byFloor[k]=byFloor[k]||{n:k,ug:r.flrGbCdNm==='지하',ord:key(r),area:0,uses:new Set()}); byFloor[k].area+=(+r.area||0); byFloor[k].uses.add((r.etcPurps||r.mainPurpsCdNm||'').trim()); });
+  const fl=Object.values(byFloor).sort((a,b)=>a.ord-b.ord);
+  const mx=Math.max(...fl.map(x=>x.area),1);
+  return `<h2>층 구성 (단면 다이어그램)</h2><div class="floors">${fl.map(x=>`<div class="${x.ug?'ug':''}" style="width:${30+x.area/mx*70}%">${esc(x.n)} · ${fmt(x.area,1)}㎡ · ${esc([...x.uses].filter(Boolean).join(', '))}</div>`).join('')}</div>
+    <table class="t"><tr><th>층</th><th>용도</th><th>구조</th><th style="text-align:right">면적㎡</th></tr>
+    ${rows.map(r=>`<tr><td>${esc(r.flrNoNm||'')}</td><td>${esc((r.etcPurps||r.mainPurpsCdNm||'').trim())}</td><td>${esc(r.strctCdNm||'')}</td><td style="text-align:right">${fmt(r.area,2)}</td></tr>`).join('')}</table>
+    <div class="note">출처: 건축물대장 층별개요 (data.go.kr)</div>`;
+}
+function tabResearch(){
+  const p=SEL.research;
+  return `<dl class="kv">
+    <dt>고유번호</dt><dd>${esc(p.id)}</dd><dt>OSC 공법유형</dt><dd><b>${esc(p.OSC공법?p.OSC공법+'패널':'미배정')}</b></dd>
+    <dt>신규 임대유형</dt><dd>${esc(p.신규임대유형||'–')}</dd><dt>주택형태</dt><dd>${esc(p.주택형태||'–')}</dd>
+    <dt>노후년수</dt><dd>${fmt(p.노후년수,1)}년</dd><dt>임대세대수</dt><dd>${fmt(p.임대세대수)}세대</dd>
+    <dt>대지면적</dt><dd>${fmt(p.대지면적,1)}㎡</dd><dt>건폐율 · 용적률</dt><dd>${fmt(p.건폐율,1)}% · ${fmt(p.용적률,1)}%</dd>
+    <dt>지형높이 · 형상</dt><dd>${esc(p.지형높이||'–')} · ${esc(p.지형형상||'–')}</dd><dt>도로접면</dt><dd>${esc(p.도로접면||'–')}</dd></dl>
+    <div class="note">LH 토지주택연구원 『OSC(Off-Site Construction)기반 매입임대주택 정비모델 연구』(2025) 부록 표를 추출한 값입니다. 건축물대장 탭의 공공데이터 값과 비교해 보세요.</div>`;
+}
+function tabFac(){
+  const f=SEL.research.시설; const arr=Object.entries(f).sort((a,b)=>b[1]-a[1]); const mx=Math.max(...arr.map(a=>a[1]),1);
+  return `<h2>반경 800m 생활편의시설 수</h2>${arr.map(([k,v])=>`<div class="hbar"><span>${esc(k)}</span><div class="b"><i style="width:${v/mx*100}%;background:#0d9488"></i></div><span>${v}</span></div>`).join('')}
+    <div class="note">LH 연구의 생활권 분석(필지 반경 800m) 결과.</div>`;
+}
+
+// ═══ 3D 건물 (VWorld LT_C_BLDGINFO: 높이·층수·연면적) ═══
+const BLD = new Map(); let loadedBoxes=[];
+const ringsOf = g => g.type==='Polygon' ? g.coordinates : g.type==='MultiPolygon' ? g.coordinates.flat() : [];
+function centroid(r){ let x=0,y=0; const n=r.length-1||1; for(let i=0;i<n;i++){x+=r[i][0];y+=r[i][1];} return [x/n,y/n]; }
+function paddedBbox(b, m){ const c=b.getCenter(), dx=m/(111320*Math.cos(c.lat*Math.PI/180)), dy=m/110540; return [b.getWest()-dx,b.getSouth()-dy,b.getEast()+dx,b.getNorth()+dy]; }
+const inside = (b, a) => a[0]>=b[0] && a[1]>=b[1] && a[2]<=b[2] && a[3]<=b[3];
+let bldBusy=false;
+async function ensureBuildings(box){
+  if(loadedBoxes.some(b=>inside(b,box)) || bldBusy) return;
+  bldBusy=true;
+  try{
+    for(let page=1; page<=4; page++){
+      const r = await vwData('LT_C_BLDGINFO', {geomFilter:`BOX(${box.map(v=>v.toFixed(6)).join(',')})`, geometry:true, size:1000, page});
+      const fc=r?.response?.result?.featureCollection; if(!fc) break;
+      fc.features.forEach(f=>{ const p=f.properties, h=+p.height>0 ? +p.height : Math.max(+p.grnd_flr||1,1)*3.1;
+        BLD.set(f.id, {type:'Feature', id:f.id, geometry:f.geometry, properties:{h, fl:+p.grnd_flr||0, area:+p.totalarea||0, apr:p.useapr_day, nm:p.bld_nm}}); });
+      if(+r.response.page.current >= +r.response.page.total) break;
+    }
+    loadedBoxes.push(box);
+    map.getSource('bldg')?.setData({type:'FeatureCollection', features:[...BLD.values()]});
+  }catch(e){ console.warn('건물 로드 실패', e); }
+  bldBusy=false;
+}
+function pip(pt, ring){ let c=false; for(let i=0,j=ring.length-1;i<ring.length;j=i++){ const [xi,yi]=ring[i],[xj,yj]=ring[j]; if(((yi>pt[1])!==(yj>pt[1])) && pt[0] < (xj-xi)*(pt[1]-yi)/(yj-yi)+xi) c=!c; } return c; }
+function inParcel(f){ if(!SEL?.poly) return false; const rings=ringsOf(SEL.poly.geometry); return ringsOf(f.geometry).some(r=>rings.some(pr=>pip(centroid(r),pr))); }
+function markSelBuildings(){
+  const fs=[...BLD.values()].filter(inParcel); SEL && (SEL.own=new Set(fs.map(f=>f.id)));
+  map.getSource('selbldg')?.setData({type:'FeatureCollection', features:fs});
+}
+function viewBuildings(){
+  if(!(ui.b3d||ui.shadow) || map.getZoom()<15.5) return;
+  const b=map.getBounds(); ensureBuildings(paddedBbox(b, 60)).then(()=>{ markSelBuildings(); updateShadows(); });
+}
+
+// ═══ 법정 최대 볼륨 (건폐율로 줄인 필지 × 용적률/건폐율 층수) ═══
+function updateMass(){
+  const src=map.getSource('mass'); if(!src) return;
+  const lg=legalOf(SEL?.land?.prposArea1Nm);
+  if(!ui.mass || !SEL?.poly || !lg){ src.setData(EMPTY); if(ui.mass&&SEL&&!lg) toast('용도지역 상한을 알 수 없어 볼륨을 만들 수 없습니다'); return; }
+  const k=Math.sqrt(lg[0]/100), floors=Math.floor(lg[1]/lg[0]), h=floors*3.1;
+  const scaled = ringsOf(SEL.poly.geometry).map(r=>{ const c=centroid(r); return r.map(([x,y])=>[c[0]+(x-c[0])*k, c[1]+(y-c[1])*k]); });
+  src.setData({type:'FeatureCollection', features:[{type:'Feature', properties:{h}, geometry:{type:'Polygon', coordinates:[scaled[0]]}}]});
+  toast(`법정 최대: 건폐율 ${lg[0]}% · 용적률 ${lg[1]}% → 약 ${floors}층 (${h.toFixed(0)}m)`);
+}
+
+// ═══ 태양 위치 · 그림자 (SunCalc 공식) ═══
+const RAD=Math.PI/180;
+function sunPos(date, lat, lng){
+  const d = date.valueOf()/864e5 - 0.5 + 2440588 - 2451545;
+  const M=RAD*(357.5291+0.98560028*d), C=RAD*(1.9148*Math.sin(M)+0.02*Math.sin(2*M)+0.0003*Math.sin(3*M));
+  const L=M+C+RAD*102.9372+Math.PI, e=RAD*23.4397;
+  const dec=Math.asin(Math.sin(e)*Math.sin(L)), ra=Math.atan2(Math.sin(L)*Math.cos(e), Math.cos(L));
+  const H=RAD*(280.16+360.9856235*d)-RAD*-lng - ra, phi=RAD*lat;
+  return { az:Math.atan2(Math.sin(H), Math.cos(H)*Math.sin(phi)-Math.tan(dec)*Math.cos(phi)),   // 남쪽 기준, 서쪽(+)
+           alt:Math.asin(Math.sin(phi)*Math.sin(dec)+Math.cos(phi)*Math.cos(dec)*Math.cos(H)) };
+}
+function kst(dayStr, hour){
+  const y=new Date().getFullYear(); let m,d;
+  if(dayStr==='today'){ const t=new Date(Date.now()+9*3600e3); m=t.getUTCMonth()+1; d=t.getUTCDate(); } else [m,d]=dayStr.split('-').map(Number);
+  return new Date(Date.UTC(y,m-1,d, Math.floor(hour)-9, Math.round((hour%1)*60)));
+}
+function hull(pts){
+  pts=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]); if(pts.length<3) return pts;
+  const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]); const lo=[],up=[];
+  for(const p of pts){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0) lo.pop(); lo.push(p); }
+  for(const p of pts.slice().reverse()){ while(up.length>=2&&cr(up[up.length-2],up[up.length-1],p)<=0) up.pop(); up.push(p); }
+  up.pop(); lo.pop(); const h=lo.concat(up); h.push(h[0]); return h;
+}
+function shadowOf(f, sun, lat){
+  if(sun.alt < 2*RAD) return null;
+  const L=Math.min(f.properties.h/Math.tan(sun.alt), 400);
+  const dx=Math.sin(sun.az)*L/(111320*Math.cos(lat*RAD)), dy=Math.cos(sun.az)*L/110540;
+  return ringsOf(f.geometry).map(r=>hull(r.concat(r.map(([x,y])=>[x+dx,y+dy]))));
+}
+function updateShadows(){
+  const src=map.getSource('shadow'); if(!src) return;
+  const c=map.getCenter(), sun=sunPos(kst(ui.day, ui.hour), c.lat, c.lng);
+  const azDeg=(sun.az/RAD+180+360)%360;
+  $('#sunInfo').textContent = `${String(Math.floor(ui.hour)).padStart(2,'0')}:${String(Math.round(ui.hour%1*60)).padStart(2,'0')} · 태양고도 ${(sun.alt/RAD).toFixed(1)}° · 방위 ${azDeg.toFixed(0)}° ${sun.alt<0?'(해 짐)':''}`;
+  if(!ui.shadow){ src.setData(EMPTY); return; }
+  const feats=[]; for(const f of BLD.values()){ const s=shadowOf(f,sun,c.lat); if(s) feats.push({type:'Feature',properties:{},geometry:{type:'MultiPolygon',coordinates:s.map(r=>[r])}}); }
+  src.setData({type:'FeatureCollection', features:feats});
+}
+// 선택 필지 일조 분석: 필지 중심점이 주변 건물 그림자에 덮이는지 10분 간격 검사
+function sunAnalysis(dayStr){
+  if(!SEL?.center) return null;
+  const [lng,lat]=SEL.center, own=SEL.own||new Set(), kx=111320*Math.cos(lat*RAD);
+  const near=[...BLD.values()].filter(f=>{ if(own.has(f.id)) return false; const c=centroid(ringsOf(f.geometry)[0]||[[0,0],[0,0]]); return Math.hypot((c[0]-lng)*kx,(c[1]-lat)*110540) < 250; });
+  const slots=[];
+  for(let h=8; h<16; h+=1/6){
+    const sun=sunPos(kst(dayStr,h), lat, lng);
+    let shaded = sun.alt<=0;
+    if(!shaded) for(const f of near){ const s=shadowOf(f,sun,lat); if(s && s.some(r=>pip([lng,lat],r))){ shaded=true; break; } }
+    slots.push({h, shaded});
+  }
+  const lit=slots.filter(s=>!s.shaded).length/6;
+  let best=0,run=0; slots.forEach(s=>{ if(s.h>=9&&s.h<15){ run = s.shaded?0:run+1/6; best=Math.max(best,run);} });
+  return {slots, lit, cont:best, n:near.length};
+}
+function tabSun(){
+  if(!SEL?.center) return wait()||'<p class="muted">필지 경계가 없어 분석할 수 없습니다.</p>';
+  if(!BLD.size) return '<p class="muted"><span class="spin"></span> 주변 건물 불러오는 중…</p>';
+  const days=[['동지','12-22'],['춘·추분','03-21'],['하지','06-21']];
+  const rs=days.map(([n,d])=>[n,sunAnalysis(d)]);
+  const w=rs[0][1];
+  const verdict = w.cont>=2 ? `<b style="color:var(--ok)">충족</b>` : (w.lit>=4 ? `<b style="color:var(--ok)">충족</b> (총 4시간 기준)` : `<b style="color:var(--warn)">미달 가능</b>`);
+  return `<div class="hl">동지 일조: 연속 <b>${w.cont.toFixed(1)}시간</b>(09–15시) · 총 <b>${w.lit.toFixed(1)}시간</b>(08–16시) → ${verdict}</div>
+    ${rs.map(([n,r])=>`<div style="margin:10px 0 2px;display:flex;justify-content:space-between"><b>${n}</b><span class="muted">일조 ${r.lit.toFixed(1)}h · 연속 ${r.cont.toFixed(1)}h</span></div>
+      <div class="strip">${r.slots.map(s=>`<i style="background:${s.shaded?'#334155':'#fbbf24'}" title="${Math.floor(s.h)}:${String(Math.round(s.h%1*60)).padStart(2,'0')}"></i>`).join('')}</div>
+      <div class="gl"><span>08시</span><span>10</span><span>12</span><span>14</span><span>16시</span></div>`).join('')}
+    <div class="chips" style="margin-top:12px"><button class="btn" data-act="shadow" type="button">지도에 그림자 켜기</button></div>
+    <div class="note">노란색=햇빛, 회색=주변 건물 그림자. 필지 중심점 기준, 주변 건물 ${w.n}동(VWorld 건물정보 높이)으로 계산한 근사치입니다.
+    건축법 시행령 일조 기준(동지 09–15시 연속 2시간 또는 08–16시 총 4시간)과 비교용이며, 지형·수목·담장은 반영하지 않습니다.</div>`;
+}
+
+// ═══ 컨트롤 바인딩 ═══
+$('#fold').onclick=()=>$('#top').classList.toggle('folded');
+if(innerWidth<=760) $('#top').classList.add('folded');
+$('#base').onchange=e=>{ BASES.forEach(t=>map.setLayoutProperty('b-'+t,'visibility',t===e.target.value?'visible':'none')); map.setLayoutProperty('b-Hybrid','visibility',e.target.value==='Satellite'?'visible':'none'); };
+$('#lyr-cad').onchange=e=>map.setLayoutProperty('ov-cad','visibility',e.target.checked?'visible':'none');
+$('#lyr-zone').onchange=e=>map.setLayoutProperty('ov-zone','visibility',e.target.checked?'visible':'none');
+$('#lyr-pts').onchange=e=>map.setLayoutProperty('pts','visibility',e.target.checked?'visible':'none');
+$('#colorBy').onchange=e=>{ ui.colorBy=e.target.value; applyFilter(); };
+$('#gu').onchange=e=>{ ui.gu=e.target.value; applyFilter(); if(ui.gu&&DATA){ const fs=DATA.features.filter(f=>f.properties.gu===ui.gu); const b=new maplibregl.LngLatBounds(); fs.forEach(f=>b.extend(f.geometry.coordinates)); map.fitBounds(b,{padding:fitPad(),maxZoom:15}); } };
+function need3dZoom(){ if(map.getZoom()<16) map.easeTo({zoom:16.5, center: SEL?.center || map.getCenter()}); }
+$('#b3d').onclick=e=>{
+  ui.b3d=!ui.b3d; e.target.classList.toggle('on',ui.b3d);
+  ['bldg-3d','selbldg-3d'].forEach(l=>map.setLayoutProperty(l,'visibility',ui.b3d?'visible':'none'));
+  map.easeTo({pitch:ui.b3d?55:0, bearing:ui.b3d?-20:0, duration:800});
+  if(ui.b3d){ need3dZoom(); viewBuildings(); }
+};
+$('#bShadow').onclick=e=>{
+  ui.shadow=!ui.shadow; e.target.classList.toggle('on',ui.shadow);
+  $('#sunBox').style.display=ui.shadow?'block':'none';
+  map.setLayoutProperty('shadow','visibility',ui.shadow?'visible':'none');
+  if(ui.shadow){ if(innerWidth<=760) $('#top').classList.remove('folded'); need3dZoom(); viewBuildings(); }
+  updateShadows();
+};
+$('#bMass').onclick=e=>{
+  if(!SEL?.poly && !ui.mass){ toast('먼저 필지를 선택하세요'); return; }
+  ui.mass=!ui.mass; e.target.classList.toggle('on',ui.mass);
+  map.setLayoutProperty('mass-3d','visibility',ui.mass?'visible':'none');
+  if(ui.mass && map.getPitch()<20) map.easeTo({pitch:55,bearing:-20});
+  updateMass(); if(SEL && TABS[curTab]?.[0]==='개요') renderSel();
+};
+$('#days').querySelectorAll('button').forEach(b=>b.onclick=()=>{ $('#days').querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); ui.day=b.dataset.d; updateShadows(); });
+$('#hour').oninput=e=>{ ui.hour=+e.target.value; updateShadows(); };
+updateShadows();
+
+$('#search').onsubmit=async e=>{
+  e.preventDefault(); const q=$('#q').value.trim(); if(!q) return;
+  for(const category of ['parcel','road']){
+    const s=await vw('req/search',{service:'search',request:'search',version:'2.0',crs:'EPSG:4326',size:1,page:1,type:'address',category,format:'json',errorformat:'json',query:q}).catch(()=>null);
+    const it=s?.response?.result?.items?.[0];
+    if(it){ const ll={lng:+it.point.x, lat:+it.point.y}; map.jumpTo({center:ll, zoom:17}); selectAt({lngLat:ll}); if(innerWidth<=760) $('#top').classList.add('folded'); return; }
+  }
+  toast('검색 결과가 없습니다');
+};
+
+function bindMapEvents(){
+  map.on('click', e=>{
+    const hit = map.getLayoutProperty('pts','visibility')!=='none' && map.queryRenderedFeatures(e.point,{layers:['pts']})[0];
+    if(hit) return selectAt({feat:hit});
+    if(map.getZoom()<14){ toast('필지를 조회하려면 더 확대하세요'); return; }
+    selectAt({lngLat:e.lngLat});
+  });
   map.on('mouseenter','pts',()=>map.getCanvas().style.cursor='pointer');
   map.on('mouseleave','pts',()=>map.getCanvas().style.cursor='');
-
-  // 전체 필지에 맞춰 화면 맞춤
-  const xs=DATA.features.map(f=>f.geometry.coordinates[0]), ys=DATA.features.map(f=>f.geometry.coordinates[1]);
-  map.fitBounds([[Math.min(...xs),Math.min(...ys)],[Math.max(...xs),Math.max(...ys)]],
-    {padding: innerWidth<=640 ? {top:70,right:20,bottom:20,left:20} : {top:30,right:30,bottom:30,left:300}, duration:0});
+  let t; map.on('moveend',()=>{ clearTimeout(t); t=setTimeout(()=>{ viewBuildings(); if(ui.shadow) updateShadows(); },250); });
 }
-
-// ─── 필지 선택: VWorld 연속지적 폴리곤 + 토지특성(토지이음) 조회 ───
-const nf = n => (n===''||n==null||n==='0.00') ? '–' : n;
-const LEGAL = {  // 서울시 조례 기준 건폐율/용적률 상한(%)
-  '제1종전용주거지역':[50,100],'제2종전용주거지역':[40,120],
-  '제1종일반주거지역':[60,150],'제2종일반주거지역':[60,200],'제3종일반주거지역':[50,250],
-  '준주거지역':[60,400],'중심상업지역':[60,1000],'일반상업지역':[60,800],
-  '근린상업지역':[60,600],'유통상업지역':[60,600],'준공업지역':[60,400]
-};
-function legalOf(uz){ for(const k in LEGAL) if(uz&&uz.includes(k.replace('지역',''))) return LEGAL[k]; return null; }
-
-// 배포 환경에서는 VWorld 데이터 API가 CORS로 막히므로 /api/vworld 프록시 경유 (로컬 Live Server는 직접 호출)
-const IS_LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
-async function vw(url){
-  if(!IS_LOCAL && url.startsWith('https://api.vworld.kr/')){
-    const u=new URL(url); u.searchParams.delete('key');
-    url = `api/vworld?_p=${encodeURIComponent(u.pathname.slice(1))}&${u.searchParams}`;
-  }
-  const r=await fetch(url); return r.json();
-}
-
-// ─── data.go.kr 건축HUB 건축물대장 표제부 (연면적·층수) ───────────────
-// PNU 19자리 = 시군구(5)+법정동(5)+대지구분(1: 1일반/2산)+본번(4)+부번(4)
-async function fetchBuilding(pnu){
-  const q = new URLSearchParams({
-    sigunguCd: pnu.slice(0,5), bjdongCd: pnu.slice(5,10),
-    platGbCd: pnu[10]==='2' ? '1' : '0', bun: pnu.slice(11,15), ji: pnu.slice(15,19)
-  });
-  // 로컬(Live Server): config.js의 키로 직접 호출 / Vercel: 서버(/api/bld)가 환경변수 키로 대신 호출
-  const url = CFG.DATA_GO_KR_KEY
-    ? `https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo?serviceKey=${encodeURIComponent(CFG.DATA_GO_KR_KEY)}&_type=json&numOfRows=50&pageNo=1&${q}`
-    : `api/bld?${q}`;
-  const r = await fetch(url);
-  const txt = await r.text();
-  let j; try{ j = JSON.parse(txt); }catch(e){ j = {error: txt.slice(0,300)}; }
-  console.log('[data.go.kr 건축물대장 표제부] PNU', pnu, j);   // ← F12 콘솔에서 응답 확인
-  let items = j?.response?.body?.items?.item;
-  if(!items) return {none:true, raw:j};
-  if(!Array.isArray(items)) items=[items];
-  // 주건축물 중 연면적이 가장 큰 동을 대표로
-  const main = items.filter(i=>String(i.mainAtchGbCdNm||'').includes('주')) ;
-  const b = (main.length?main:items).sort((a,b)=>(+b.totArea||0)-(+a.totArea||0))[0];
-  return { totArea:+b.totArea||0, grnd:+b.grndFlrCnt||0, ugrnd:+b.ugrndFlrCnt||0,
-           purps:b.mainPurpsCdNm||'', name:b.bldNm||'', n:items.length };
-}
-const dataAPI = (data,extra)=>`https://api.vworld.kr/req/data?service=data&request=GetFeature`
-  +`&data=${data}&format=json&crs=EPSG:4326&domain=${encodeURIComponent(VDOMAIN)}&key=${VKEY}&${extra}`;
-
-async function selectParcel(feat, lngLat){
-  const p=feat.properties; let ll=feat.geometry.coordinates;
-  const MOBILE = innerWidth<=640;
-  const pop=new maplibregl.Popup({maxWidth:'300px', anchor: MOBILE ? 'top' : undefined}).setLngLat(lngLat)
-    .setHTML(`<b>${p.addr}</b><br><span style="color:#888">VWorld 조회 중…</span>`).addTo(map);
-
-  let pnu=null, poly={type:'FeatureCollection',features:[]};
-  // (a) 주소(지번)로 정확한 PNU·좌표 찾기 — 점 좌표는 동 단위 근사값인 경우가 많음
-  try{
-    const s=await vw(`https://api.vworld.kr/req/search?service=search&request=search&version=2.0&crs=EPSG:4326`
-      +`&size=1&page=1&type=address&category=parcel&format=json&errorformat=json`
-      +`&query=${encodeURIComponent('서울특별시 '+p.addr)}&key=${VKEY}&domain=${encodeURIComponent(VDOMAIN)}`);
-    const it=s?.response?.result?.items?.[0];
-    if(it){ pnu=it.id; ll=[+it.point.x, +it.point.y]; pop.setLngLat(ll); }
-  }catch(err){ console.warn('주소 검색 실패',err); }
-  // (b) 연속지적 폴리곤: PNU가 있으면 PNU로, 없으면 점 위치로
-  try{
-    const filt = pnu ? `attrFilter=pnu:=:${pnu}` : `geomFilter=POINT(${ll[0]} ${ll[1]})`;
-    const r=await vw(dataAPI('LP_PA_CBND_BUBUN',`${filt}&geometry=true&size=1`));
-    const fc=r?.response?.result?.featureCollection;
-    if(fc?.features?.length){ poly=fc; pnu=pnu || fc.features[0].properties.pnu || fc.features[0].properties.PNU; }
-  }catch(err){ console.warn('지적 조회 실패',err); }
-  map.getSource('parcel-poly').setData(poly);
-  if(poly.features.length){
-    const b=new maplibregl.LngLatBounds();
-    poly.features[0].geometry.coordinates.flat(2).forEach(c=>{if(Array.isArray(c[0]))c.forEach(x=>b.extend(x));else b.extend(c);});
-    try{ map.fitBounds(b,{padding: MOBILE ? {top:70,bottom:Math.round(innerHeight*0.6),left:40,right:40} : 120, maxZoom:18,duration:400}); }catch(e){}
-  }
-
-  let land={};
-  if(pnu){
-    try{
-      const y=new Date().getFullYear();
-      let r=null;
-      for(const yr of [y,y-1,y-2]){
-        r=await vw(`https://api.vworld.kr/ned/data/getLandCharacteristics?key=${VKEY}`
-          +`&pnu=${pnu}&stdrYear=${yr}&format=json&numOfRows=1&pageNo=1&domain=${encodeURIComponent(VDOMAIN)}`);
-        const f=r?.landCharacteristicss?.field?.[0] || r?.response?.fields?.field?.[0];
-        if(f){ land=f; break; }
-      }
-    }catch(err){ console.warn('토지특성 조회 실패',err); }
-  }
-
-  const g=(...ks)=>{ for(const k of ks){ if(land[k]!=null && land[k]!=='') return land[k]; } return ''; };
-  const uz   = g('prposArea1Nm','prposArea2Nm','ladUseSittnNm','lclasUcdNm');
-  const jimok= g('lndcgrCodeNm','lndcgrCode');
-  const larea= g('ladArea','lndpclAr');
-  const price= g('pblntfPclnd');
-  const vShape=g('ladShape','tpgrphFrmNm','tpgrphHgCodeNm');
-  const vRoad = g('roadSideCodeNm','roadSideCode');
-  const lg = legalOf(uz);
-
-  pop.setHTML(
-    `<b>${p.addr}</b> &nbsp;<span style="color:#888;font-size:11px">고유번호 ${p.id}</span>`+
-    (pnu?`<div style="color:#888;font-size:11px">PNU ${pnu}</div>`:'')+
-    `<div class="bld">건축물대장 조회 중…</div>`+
-    `<table style="border-collapse:collapse;margin-top:6px;font-size:12px">`+
-    `<tr><td style="color:#888;padding:1px 8px 1px 0">항목</td><td style="color:#888">LH 연구 부록</td><td style="color:#888">VWorld·토지이음</td></tr>`+
-    row('용도지역','–', uz||'–')+
-    row('지목','–', jimok||'–')+
-    row('대지/토지면적', p.대지면적?nf(p.대지면적)+'㎡':'–', larea?(+larea).toLocaleString()+'㎡':'–')+
-    row('건폐율', nf(p.건폐율)+(p.건폐율&&p.건폐율!=='0.00'?'%':''), lg?('법정 '+lg[0]+'%'):'–')+
-    row('용적률', nf(p.용적률)+(p.용적률&&p.용적률!=='0.00'?'%':''), lg?('법정 '+lg[1]+'%'):'–')+
-    row('지형형상', p.지형형상||'–', vShape||'–')+
-    row('도로접면', p.도로접면||'–', vRoad||'–')+
-    row('개별공시지가','–', price?(+price).toLocaleString()+'원/㎡':'–')+
-    `</table>`+
-    `<div style="margin-top:6px;font-size:12px">주택형태 <b>${p.주택형태||'–'}</b> · 노후 ${nf(p.노후년수)}년 · 임대 ${nf(p.임대세대수)}세대`+
-    ` · OSC <b>${p.OSC공법||'미배정'}</b></div>`
-  );
-  // ─── data.go.kr 한 겹: 연면적 · 층수 한 줄 ───
-  const el = pop.getElement()?.querySelector('.bld');
-  if(!pnu){ if(el) el.textContent='건축물대장: PNU를 찾지 못함'; return; }
-  try{
-    const b = await fetchBuilding(pnu);
-    if(!el) return;
-    if(b.none){
-      const msg = b.raw?.error || b.raw?.response?.header?.resultMsg || '';
-      el.innerHTML = `건축물대장: 등록된 건축물 없음<small>${msg?String(msg).slice(0,80):'data.go.kr 건축HUB'}</small>`;
-    }else{
-      el.innerHTML = `연면적 <b>${b.totArea.toLocaleString(undefined,{maximumFractionDigits:2})}㎡</b>`
-        + ` · 지상 <b>${b.grnd}층</b>${b.ugrnd?` / 지하 ${b.ugrnd}층`:''}`
-        + `<small>건축물대장 표제부 · ${b.purps}${b.n>1?` · ${b.n}개 동 중 대표`:''} · data.go.kr</small>`;
-    }
-  }catch(err){ console.warn('건축물대장 조회 실패',err); if(el) el.textContent='건축물대장 조회 실패 (F12 콘솔 확인)'; }
-  function row(k,a,b){return `<tr><td style="padding:1px 8px 1px 0;color:#555">${k}</td><td>${a}</td><td><b>${b}</b></td></tr>`;}
-}
-
-// ─── 범례 ─────────────────────────────────────────────────────────
-const legend=document.getElementById('legend');
-Object.entries({'소형패널':'소형','중형패널':'중형','대형패널':'대형','미배정':''}).forEach(([label,k])=>{
-  const r=document.createElement('label');r.className='row';
-  r.innerHTML=`<input type="checkbox" checked data-k="${k}"><span class="dot" style="background:${OSC[k]}"></span>${label}`;
-  legend.appendChild(r);
-});
-
-// ─── 배경지도 전환 시 레이어 재구성 ──────────────────────────────
-function rebuild(){ addOverlays(); if(DATA) addParcels(); }
-map.on('load',rebuild);
-document.querySelectorAll('input[name=base]').forEach(r=>{
-  r.onchange=()=>{ if(r.checked){ map.setStyle(styleFor(r.value)); map.once('styledata',()=>setTimeout(rebuild,60)); } };
-});
-
-// ─── 데이터 로드 ──────────────────────────────────────────────────
-fetch(DATA_URL).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();})
-  .then(fc=>{ DATA=fc; document.getElementById('n').textContent=fc.features.length;
-             if(map.isStyleLoaded()) addParcels(); else map.once('load',()=>{}); })
-  .catch(e=>showErr('데이터 로드 실패 ('+e.message+') — 로컬 서버(localhost)에서 열어주세요'));
 </script>
 </body>
 </html>
