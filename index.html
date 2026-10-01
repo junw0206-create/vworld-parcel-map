@@ -245,7 +245,8 @@ const ui = { b3d:false, shadow:false, mass:false, day:'12-22', hour:12, colorBy:
 let readyResolve; const mapReady = new Promise(r=>readyResolve=r);
 let _inited=false;
 // 'load'는 첫 타일까지 기다리므로, 스타일이 준비되는 즉시 레이어를 올림
-map.on('styledata', ()=>{ if(map.isStyleLoaded()) initLayers(); });
+map.on('style.load', ()=>initLayers());
+map.on('styledata', ()=>{ if(map.style?._loaded) initLayers(); });
 map.on('load', ()=>initLayers());
 function initLayers(){
   if(_inited) return; _inited=true;
