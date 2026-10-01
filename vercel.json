@@ -1,4 +1,5 @@
 {
   "regions": ["icn1"],
-  "rewrites": [{ "source": "/config.js", "destination": "/api/config" }]
+  "rewrites": [{ "source": "/config.js", "destination": "/api/config" }],
+  "headers": [{ "source": "/data/(.*)", "headers": [{ "key": "Access-Control-Allow-Origin", "value": "*" }] }]
 }

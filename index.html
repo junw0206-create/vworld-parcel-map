@@ -332,7 +332,7 @@ function initParcels(){
     {padding: mobile ? {top:150,left:20,right:20,bottom:40} : {top:40,left:340,right:450,bottom:40}, duration:0});
   applyFilter();
 }
-(window.PARCELS ? Promise.resolve(window.PARCELS) : fetch('data/parcels.geojson').then(r=>r.json())).then(fc=>{
+(window.PARCELS ? Promise.resolve(window.PARCELS) : fetch('data/parcels.geojson').then(r=>{ if(!r.ok) throw 0; return r.json(); }).catch(()=>fetch(API_BASE+'data/parcels.geojson').then(r=>r.json()))).then(fc=>{
   DATA=fc; $('#n').textContent=`(${fc.features.length}필지)`;
   const sel=$('#gu'); [...new Set(fc.features.map(f=>f.properties.gu))].sort().forEach(g=>sel.add(new Option(g,g)));
   if(map.getSource('pts')) initParcels();
