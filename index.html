@@ -8,6 +8,9 @@
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <!-- 키는 소스에 없음: 로컬은 .env로 만든 config.js, Vercel은 /api/config 가 채워줌 -->
 <script src="config.js"></script>
+<script>/* 파일을 더블클릭(file://)하거나 config.js가 없을 때: 배포 서버의 설정을 사용 */
+if(!(window.APP_CONFIG&&window.APP_CONFIG.VWORLD_KEY)) document.write('<script src="https://vworld-parcel-map.vercel.app/config.js"><\/script>');</script>
+<script src="data/parcels.js"></script>
 <style>
   :root{
     --bg:#ffffff; --fg:#1b1d22; --muted:#6b7280; --panel:rgba(255,255,255,.96); --line:#e3e5ea; --soft:#f3f4f7;
@@ -196,8 +199,10 @@
 // ═══ 설정 · 키 (소스코드에 직접 쓰지 않음: .env → config.js / Vercel 환경변수) ═══
 const CFG  = window.APP_CONFIG || {};
 const VKEY = CFG.VWORLD_KEY || "";
-const VDOMAIN = location.hostname || "localhost";      // VWorld 키 등록 URL과 비교됨
-const IS_LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+// 배포 사이트가 아닌 곳(파일 더블클릭·Live Server)에서는 배포 서버의 API 프록시를 사용
+const ON_VERCEL = /\.vercel\.app$/.test(location.hostname);
+const API_BASE = ON_VERCEL ? '' : 'https://vworld-parcel-map.vercel.app/';
+const VDOMAIN = ON_VERCEL ? location.hostname : 'localhost';   // VWorld 키에 등록된 URL
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = (n, d=0) => (n==null || n==='' || isNaN(+n)) ? '–' : (+n).toLocaleString('ko-KR',{maximumFractionDigits:d});
@@ -208,7 +213,7 @@ if(!VKEY) toast('VWorld 키 없음 — 로컬: node tools/make-config.mjs / Verc
 // VWorld 데이터 API는 배포 환경에서 CORS로 막히므로 /api/vworld 프록시 경유 (로컬은 직접)
 async function vw(path, params){
   const qs = new URLSearchParams({...params, domain:VDOMAIN});
-  const url = IS_LOCAL ? `https://api.vworld.kr/${path}?${qs}&key=${VKEY}` : `api/vworld?_p=${encodeURIComponent(path)}&${qs}`;
+  const url = `${API_BASE}api/vworld?_p=${encodeURIComponent(path)}&${qs}`;
   const r = await fetch(url); return r.json();
 }
 const vwData = (data, extra) => vw('req/data', {service:'data', request:'GetFeature', data, format:'json', crs:'EPSG:4326', ...extra});
@@ -218,7 +223,7 @@ async function bld(op, pnu){
   const q = new URLSearchParams({ sigunguCd:pnu.slice(0,5), bjdongCd:pnu.slice(5,10), platGbCd:pnu[10]==='2'?'1':'0', bun:pnu.slice(11,15), ji:pnu.slice(15,19) });
   const url = CFG.DATA_GO_KR_KEY
     ? `https://apis.data.go.kr/1613000/BldRgstHubService/${op}?serviceKey=${encodeURIComponent(CFG.DATA_GO_KR_KEY)}&_type=json&numOfRows=100&pageNo=1&${q}`
-    : `api/bld?op=${op}&${q}`;
+    : `${API_BASE}api/bld?op=${op}&${q}`;
   try{
     const txt = await (await fetch(url)).text();
     let j; try{ j=JSON.parse(txt); }catch(e){ j={error:txt.slice(0,200)}; }
@@ -327,7 +332,7 @@ function initParcels(){
     {padding: mobile ? {top:150,left:20,right:20,bottom:40} : {top:40,left:340,right:450,bottom:40}, duration:0});
   applyFilter();
 }
-fetch('data/parcels.geojson').then(r=>r.json()).then(fc=>{
+(window.PARCELS ? Promise.resolve(window.PARCELS) : fetch('data/parcels.geojson').then(r=>r.json())).then(fc=>{
   DATA=fc; $('#n').textContent=`(${fc.features.length}필지)`;
   const sel=$('#gu'); [...new Set(fc.features.map(f=>f.properties.gu))].sort().forEach(g=>sel.add(new Option(g,g)));
   if(map.getSource('pts')) initParcels();

@@ -2,6 +2,7 @@
 // (VWorld 데이터 API는 브라우저 직접 호출 시 CORS로 막힘 → 서버에서 대신 호출, 키는 환경변수 VWORLD_KEY)
 const ALLOWED = new Set(['req/search', 'req/data', 'ned/data/getLandCharacteristics']);
 module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');   // 로컬 파일(file://)·Live Server에서도 호출 가능
   const q = { ...(req.query || {}) };
   const path = q._p; delete q._p; delete q.key;
   if (!ALLOWED.has(path)) { res.statusCode = 400; return res.json({ error: 'path not allowed' }); }

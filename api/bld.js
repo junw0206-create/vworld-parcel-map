@@ -2,6 +2,7 @@
 // op: 표제부 / 층별개요 / 총괄표제부 / 지역지구구역 / 주택가격 / 기본개요
 const OPS = new Set(['getBrTitleInfo', 'getBrFlrOulnInfo', 'getBrRecapTitleInfo', 'getBrJijiguInfo', 'getBrHsprcInfo', 'getBrBasisOulnInfo']);
 module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');   // 로컬 파일(file://)·Live Server에서도 호출 가능
   const q = req.query || {};
   const op = q.op || 'getBrTitleInfo';
   const ok = (v, n) => typeof v === 'string' && new RegExp(`^\\d{${n}}$`).test(v);
